@@ -11,14 +11,15 @@ export interface UserData {
 export interface RoomData {
     id: string,
     name: string,
-    connections?: number,
-    users?: number
+    users?: number,
+    connections?: number
 }
 
 export interface ChannelData {
     owner_id: string,
     id: string,
     name: string,
+    domain?: string, // defaults to ${id}.openchat.dev
     badges?: Badge[],
     emotes?: Emote[]
 }

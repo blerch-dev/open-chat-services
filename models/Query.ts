@@ -9,7 +9,7 @@ DB.connect();
 
 const API = Router();
 
-// User
+// #region User
 API.get('/user/:id', (req, res, next) => {
     
 });
@@ -17,10 +17,12 @@ API.get('/user/:id', (req, res, next) => {
 API.post('/user/create', async (req, res, next) => {
     let result = await User.FormValidation(req.body);
     if(result instanceof User) {
-
+        // create user
+        // set session
     } else {
         return res.status(result.code).json(result);
     }
 });
+// #endregion
 
 export { API };
