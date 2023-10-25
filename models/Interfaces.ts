@@ -1,9 +1,10 @@
 export interface UserData {
     uuid: string,
     name: string,
-    role: number,
+    status?: number,
     auth?: PlatformConnection[],
     subs?: Subscription[],
+    roles?: ChannelRole[],
     hex?: string, // color in chats without class system
     age?: number // epoch ts from account creation
 }
@@ -19,9 +20,12 @@ export interface ChannelData {
     owner_id: string,
     id: string,
     name: string,
+    display?: string,
     domain?: string, // defaults to ${id}.openchat.dev
+
     badges?: Badge[],
-    emotes?: Emote[]
+    emotes?: Emote[],
+    roles?: (Role | ChannelRole)[]
 }
 
 import { Platforms } from './Enums';
@@ -42,7 +46,6 @@ export interface Subscription {
 export interface Badge {
     icon: string, // link to icon
     name: string,
-    global?: string
 }
 
 import { RoleType } from './Enums';
@@ -50,7 +53,11 @@ export interface Role {
     type: RoleType,
     badge: Badge,
     name: string,
-    global?: string
+    global?: boolean
+}
+
+export interface ChannelRole extends Role {
+    channel: string
 }
 
 export interface Emote {
@@ -61,11 +68,15 @@ export interface Emote {
 
 export interface ServerParams {
     port: number,
-    api?: boolean,
-    chat?: boolean
+    dev?: boolean,
+    auth?: boolean,
+    chat?: boolean,
+    allowedDomains?: string[]
 }
 
 import http from 'http';
+import { Server } from './Server';
 export interface ChatServerParams {
-    server: http.Server<typeof http.IncomingMessage, typeof http.ServerResponse>
+    server: Server,
+    listener: http.Server<typeof http.IncomingMessage, typeof http.ServerResponse>
 }

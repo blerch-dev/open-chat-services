@@ -1,5 +1,5 @@
 import { UserData } from "./Interfaces";
-import { HTTPResponse } from "./Utils";
+import { HTTPResponse } from "../Utils";
 
 export class User {
     static Create(data: UserData): User | Error {
@@ -12,18 +12,31 @@ export class User {
         return { okay: false, code: 500 }
     }
 
+    static DBTableFormat = () => {
+        return `
+            CREATE TABLE IF NOT EXISTS "users" (
+                "uuid"          uuid NOT NULL,
+                "name"          varchar(32) NOT NULL,
+                "
+            )
+        `;
+    }
+
     private data: UserData;
 
     constructor(data: UserData) { this.data = data; }
+
+    getID() { return this.data.uuid; }
 
     toJSON() {
         return {
             uuid: '',
             name: '',
-            role: 0,
+            status: 0,
             auth: [],
             subs: [],
-            hex: '',
+            roles: [],
+            hex: '#ffffff',
             age: 0
         } as UserData;
     }

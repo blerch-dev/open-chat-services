@@ -1,5 +1,6 @@
 
 export enum ServiceType {
+    Gateway,
     Auth,
     Chat
 }
@@ -19,8 +20,9 @@ export enum BadgeType {
 }
 
 export enum RoleType {
-    Guest,
-    Helper,
+    Other,
+    Decoration,
+    // Helper,
     Mod,
     Bot,
     Janitor,
