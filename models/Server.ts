@@ -1,21 +1,23 @@
 import { Server as HTTPServer, IncomingMessage, ServerResponse } from "http";
 
-import cors from "cors";
-import express from "express";
-import session from "express-session"
+import * as cors from "cors";
+import * as express from "express";
+import * as session from "express-session"
 import { WebSocketServer, WebSocket } from "ws";
 
-import { ServerParams, ChatServerParams } from "./Interfaces";
-import { API } from '../Utils/Query';
+import { ServerParams, ChatServerParams, AuthServerParams } from "./Interfaces";
+import { User } from "./User";
+import { APIConnection } from "../Data/Query";
 
 export class Server {
     private app = express();
     private listener: HTTPServer<typeof IncomingMessage, typeof ServerResponse> | undefined;
+    private auth: AuthServer | undefined;
     private chat: ChatServer | undefined;
 
     constructor(params: ServerParams) { this.Configure(params); }
 
-    Configure(params: ServerParams) {
+    private async Configure(params: ServerParams) {
         this.app.set('trust proxy', 1);
 
         // #region Origin
@@ -57,23 +59,66 @@ export class Server {
         // #endregion
 
         // Auth Server
-        if(params?.auth === true) { this.app.use(API); }
+        if(params?.auth === true) { 
+            this.auth = new AuthServer({ server: this });
+            const api = await this.auth.getAPI();
+            this.app.use(api); 
+        }
 
         this.listener = this.app.listen(params.port ?? 8000);
         
         // Chat Server
-        if(params?.chat === true) { this.chat = new ChatServer({ server: this, listener: this.listener }); }
+        if(params?.chat === true) { 
+            this.chat = new ChatServer({ server: this, listener: this.listener }); 
+        }
+    }
+
+    public UserCreationTest() {
+
+    }
+}
+
+export class AuthServer {
+    private server: Server;
+    private DB: APIConnection;
+
+    constructor(params: AuthServerParams) {
+        this.server = params.server;
+        this.DB = new APIConnection();
+    }
+
+    async getAPI() {
+        const API = express.Router();
+
+        // #region User
+        API.get('/user/:id', (req, res, next) => {
+            
+        });
+        
+        API.post('/user/create', async (req, res, next) => {
+            let result = await User.FormValidation(req.body);
+            if(result instanceof User) {
+                console.log("Created User:", result.toJSON());
+                // create user
+                // set session
+            } else {
+                return res.status(result.code).json(result);
+            }
+        });
+        // #endregion
+
+        return API;
     }
 }
 
 export class ChatServer {
-    private server = new WebSocketServer({ noServer: true });
+    private wsserver = new WebSocketServer({ noServer: true });
 
     constructor(params: ChatServerParams) { this.Configure(params); }
 
     Configure(params: ChatServerParams) {
         params.listener.on('upgrade', (request, socket, head) => {
-            this.server.handleUpgrade(request, socket, head, this.Connection);
+            this.wsserver.handleUpgrade(request, socket, head, this.Connection);
         });
     }
 

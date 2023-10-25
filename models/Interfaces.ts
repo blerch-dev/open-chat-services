@@ -74,9 +74,13 @@ export interface ServerParams {
     allowedDomains?: string[]
 }
 
-import http from 'http';
 import { Server } from './Server';
+export interface AuthServerParams {
+    server: Server
+}
+
+import { Server as HTTPServer, IncomingMessage, ServerResponse } from "http";
 export interface ChatServerParams {
     server: Server,
-    listener: http.Server<typeof http.IncomingMessage, typeof http.ServerResponse>
+    listener: HTTPServer<typeof IncomingMessage, typeof ServerResponse>
 }

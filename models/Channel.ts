@@ -1,5 +1,8 @@
 import { ChannelData } from "./Interfaces";
 
 export class Channel {
-    constructor(data: ChannelData) {}
+
+    private data: ChannelData;
+
+    constructor(data: ChannelData) { this.data = data; }
 }
