@@ -1,3 +1,9 @@
+import { DatabaseResponse } from '../Utils'
+export interface Model {
+    toJSON(): any,
+    DBInsertSafe(callback: (str: string, val: any[]) => Promise<DatabaseResponse>): any
+}
+
 export interface UserData {
     uuid: string,
     name: string,
@@ -7,6 +13,7 @@ export interface UserData {
     roles?: ChannelRole[],
     hex?: string, // color in chats without class system
     age?: number // epoch ts from account creation
+    last?: number // epoch of last long session generation (every other week)
 }
 
 export interface RoomData {
@@ -53,7 +60,7 @@ export interface Role {
     type: RoleType,
     badge: Badge,
     name: string,
-    global?: boolean
+    channel_id?: string
 }
 
 export interface ChannelRole extends Role {
@@ -63,7 +70,7 @@ export interface ChannelRole extends Role {
 export interface Emote {
     icon: string, // link to icon
     name: string,
-    global?: boolean
+    channel_id?: string
 }
 
 export interface ServerParams {

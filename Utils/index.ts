@@ -21,3 +21,18 @@ export type HTTPResponse = {
     message?: string,
     data?: unknown
 }
+
+// Database Response
+export type DatabaseResponse = {
+    results?: any[],
+    meta?: any,
+    error?: {
+        code: number, // Matches HTTP Response Code
+        message?: string
+    }
+}
+
+// Sleep
+export function sleep(ms: number) {
+    return new Promise( resolve => setTimeout(resolve, ms) );
+}

@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "start": "ts-node dev.ts"
+    "start": "ts-node Services/dev"
   },
   "dependencies": {
     "@types/express": "^4.17.18",

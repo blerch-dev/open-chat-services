@@ -5,9 +5,16 @@ import * as express from "express";
 import * as session from "express-session"
 import { WebSocketServer, WebSocket } from "ws";
 
-import { ServerParams, ChatServerParams, AuthServerParams } from "./Interfaces";
+import { ServerParams, ChatServerParams, AuthServerParams, UserData } from "./Interfaces";
 import { User } from "./User";
 import { APIConnection } from "../Data/Query";
+import { DatabaseResponse, sleep } from "../Utils";
+
+declare module "express-session" {
+    interface SessionData {
+        user: UserData
+    }
+}
 
 export class Server {
     private app = express();
@@ -73,8 +80,15 @@ export class Server {
         }
     }
 
-    public UserCreationTest() {
+    public async UserTableCreationTest(force = false, attempts = 0) {
+        if(!this.auth || attempts >= 10) { return; }
+        if(!this.auth.isConnected() && attempts < 10) {
+            await sleep(100); return await this.UserTableCreationTest(force, attempts + 1);
+        }
 
+        let post = User.DBTableFormat(force);
+        // console.log("Create Table:::", post);
+        return await this.auth.QueryData(post);
     }
 }
 
@@ -87,27 +101,21 @@ export class AuthServer {
         this.DB = new APIConnection();
     }
 
+    isConnected() {
+        return this.DB.connected;
+    }
+
     async getAPI() {
         const API = express.Router();
 
-        // #region User
-        API.get('/user/:id', (req, res, next) => {
-            
-        });
-        
-        API.post('/user/create', async (req, res, next) => {
-            let result = await User.FormValidation(req.body);
-            if(result instanceof User) {
-                console.log("Created User:", result.toJSON());
-                // create user
-                // set session
-            } else {
-                return res.status(result.code).json(result);
-            }
-        });
-        // #endregion
+        // User Model - Requires Lambda to Keep Context
+        API.use('/user', User.getAPIRouter((...args) => { return this.DB.Query(...args) }));
 
         return API;
+    }
+
+    async QueryData(str: string, values: any[] = []) {
+        return await this.DB.Query(str, values);
     }
 }
 
