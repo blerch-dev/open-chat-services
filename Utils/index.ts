@@ -3,6 +3,9 @@ import { v4 } from 'uuid';
 export function GenerateUUID() { return v4(); }
 export function ValidUUID(uuid: string) { return uuid.length === 36 }
 
+import { randomBytes } from 'crypto';
+export function GenerateID(bytes = 4) { return randomBytes(bytes).toString('hex'); }
+
 // Time
 export enum TimeValues {
     Second = 1000,
