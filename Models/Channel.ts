@@ -3,6 +3,7 @@ import { Router } from "express";
 
 import { DatabaseResponse, GenerateID, HTTPResponse, ValidUUID } from "../Utils";
 import { ChannelData, Model } from "./Interfaces";
+import { Room } from "./Room";
 
 export class Channel implements Model {
 
@@ -177,14 +178,22 @@ export class Channel implements Model {
     // #endregion
 
     private data: ChannelData;
+    private room: Room;
 
-    constructor(data: ChannelData) { this.data = data; }
+    constructor(data: ChannelData) { 
+        this.data = data;
+        this.room = new Room({
+            id: this.data.id,
+            name: this.data.name ?? this.data.slug ?? this.data.id ?? 'unnamed-room'
+        });
+    }
 
     toJSON() {
         return {
             id: this.data.id ?? null,
             slug: this.data.slug ?? null,
             owner_uuid: this.data.owner_uuid ?? null,
+            name: this.data.name ?? this.data.slug ?? '',
             domain: this.data.domain ?? `${this.data.slug ?? this.data.id}.openchat.dev`,
             icon: this.data.icon ?? '/channel-logo.svg',
             embeds: this.data.embeds ?? {},

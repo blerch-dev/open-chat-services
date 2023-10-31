@@ -10,6 +10,4 @@ const app = new Server({
 });
 
 // First Param Forces Drop
-app.UserTableCreationTest(true).then((result) => {
-    // console.log("User Creation Test:", result);
-});
+app.DBFormat(true);

@@ -81,15 +81,19 @@ export class Server {
         }
     }
 
-    public async UserTableCreationTest(force = false, attempts = 0) {
-        if(!this.auth || attempts >= 10) { return; }
+    public async DBFormat(force = false, attempts = 0) {
+        if(!this.auth || attempts >= 10) { return console.log("Could Not Connect to DB..."); }
         if(!this.auth.isConnected() && attempts < 10) {
-            await sleep(100); return await this.UserTableCreationTest(force, attempts + 1);
+            await sleep(100); return await this.DBFormat(force, attempts + 1);
         }
 
-        let post = User.DBTableFormat(force);
-        // console.log("Create Table:::", post);
-        return await this.auth.QueryData(post);
+        const postTable = async (str: string) => {
+            let result = await this.auth.QueryData(str);
+            return true;
+        }
+
+        if(!await postTable(User.DBTableFormat(force))) { return console.log("Issue with User DB Table..."); }
+        if(!await postTable(Channel.DBTableFormat(force))) { return console.log("Issue with Channel DB Table..."); }
     }
 }
 
