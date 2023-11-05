@@ -1,5 +1,5 @@
 import { DatabaseResponse } from '../Utils'
-export interface Model {
+export interface Model { // public fields/methods only
     toJSON(): any,
     DBInsertSafe(callback: (str: string, val: any[]) => Promise<DatabaseResponse>): Promise<any>
 }
@@ -16,11 +16,19 @@ export interface UserData {
     last?: number // epoch of last long session generation (every other week)
 }
 
+import { User } from './User';
+export interface RoomData {
+    id: string,
+    name: string,
+    users?: Set<User>,
+    connections?: number
+}
+
 export interface ChannelData {
     id: string, // channel id will always represent a room id
     slug: string,
     owner_uuid: string,
-    name?: string, // defaults to slug
+    name: string, // defaults to slug
     domain?: string, // defaults to ${slug ?? id}.openchat.dev
     icon?: string,
     embeds?: {
@@ -33,13 +41,6 @@ export interface ChannelData {
     badges?: Badge[],
     emotes?: Emote[],
     roles?: (Role)[]
-}
-
-export interface RoomData {
-    id: string,
-    name: string,
-    users?: number,
-    connections?: number
 }
 
 import { Platforms } from './Enums';
@@ -96,4 +97,16 @@ import { Server as HTTPServer, IncomingMessage, ServerResponse } from "http";
 export interface ChatServerParams {
     server: Server,
     listener: HTTPServer<typeof IncomingMessage, typeof ServerResponse>
+}
+
+import { ChatMessageType } from './Enums';
+export interface ChatMessage {
+    type: ChatMessageType,
+    value: string,
+    meta: any,
+
+    // Matches Message Type - Optionally after value
+    event?: any,
+    state?: any,
+    admin?: any
 }

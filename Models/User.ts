@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { QueryResult } from "pg";
 
-import { Model, UserData } from "./Interfaces";
+import { ChatMessage, Model, UserData } from "./Interfaces";
 import { DatabaseResponse, GenerateUUID, HTTPResponse, ValidUUID } from "../Utils";
 
 export class User implements Model {
@@ -206,6 +206,7 @@ export class User implements Model {
     // #endregion
 
     private data: UserData;
+    private sockets: Set<WebSocket>
 
     constructor(data: UserData) { this.data = {
         uuid: data?.uuid ?? null,
@@ -221,6 +222,7 @@ export class User implements Model {
     }; }
 
     getID() { return this.data.uuid; }
+    getName() { return this.data.name; }
 
     toJSON() {
         return {
@@ -235,5 +237,22 @@ export class User implements Model {
             subs: this.data?.subs ?? [],
             roles: this.data?.roles ?? []
         } as UserData;
+    }
+
+    getSockets() {
+        return this.sockets;
+    }
+
+    addSocket(socket: WebSocket) {
+        return this.sockets.add(socket);
+    }
+
+    removeSocket(socket: WebSocket) {
+        return this.sockets.delete(socket);
+    }
+
+    async sendToSockets(msg: ChatMessage) {
+        let str = JSON.stringify(msg);
+        Array.from(this.sockets).forEach((socket) => { socket.send(str); });
     }
 }

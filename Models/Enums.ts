@@ -30,6 +30,14 @@ export enum RoleType {
     Owner
 }
 
+export enum ChatMessageType {
+    Chat,
+    Event,
+    State,
+    Admin,
+    Other
+}
+
 export enum Platforms {
     Youtube,
     Twitch,
