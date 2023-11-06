@@ -1,3 +1,4 @@
+import { NATSClient } from "../Data/Message";
 import { ChannelData, ChatMessage, RoomData } from "./Interfaces";
 import { User } from "./User";
 
@@ -10,9 +11,13 @@ export class Room {
     // #endregion
 
     private data: RoomData;
+    private nats: NATSClient;
 
     constructor(data: RoomData) {
         this.data = data;
+        this.nats = new NATSClient({ port: 4222 }, { value: 'test', callback: (sub, msg) => {
+            console.log("Sub - MSG:", sub, msg);
+        } });
     }
 
     addUser(user: User, socket: WebSocket): boolean {
