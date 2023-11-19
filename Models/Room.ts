@@ -15,8 +15,9 @@ export class Room {
 
     constructor(data: RoomData) {
         this.data = data;
-        this.nats = new NATSClient({ port: 4222 }, { value: 'test', callback: (sub, msg) => {
-            console.log("Sub - MSG:", sub, msg);
+        this.nats = new NATSClient(data.nats ?? { port: 4222 }, data.sub ?? { value: `room-${data.id}`, callback: (sub, msg) => {
+            // console.log("Subbed MSG:", JSON.parse(msg));
+            this.dispatch(JSON.parse(msg));
         } });
     }
 

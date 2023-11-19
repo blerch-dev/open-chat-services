@@ -10,6 +10,8 @@ import { APIConnection } from "../Data/Query";
 import { DatabaseResponse, sleep } from "../Utils";
 import { User } from "./User";
 import { Channel } from "./Channel";
+import { NATSClient } from "../Data/Message";
+import { Room } from "./Room";
 
 declare module "express-session" {
     interface SessionData {
@@ -129,6 +131,7 @@ export class AuthServer {
 
 export class ChatServer {
     private wsserver = new WebSocketServer({ noServer: true });
+    private rooms = new Set<Room>();
 
     constructor(params: ChatServerParams) { this.Configure(params); }
 

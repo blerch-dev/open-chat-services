@@ -39,3 +39,7 @@ export type DatabaseResponse = {
 export function sleep(ms: number) {
     return new Promise( resolve => setTimeout(resolve, ms) );
 }
+
+export function padLeft(num: number, length = 2) {
+    return ('0000' + num).slice(-1 * length);
+}

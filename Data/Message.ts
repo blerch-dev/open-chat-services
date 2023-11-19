@@ -35,20 +35,15 @@ export class NATSClient {
     }
 
     public async Subscribe(value: string, callback: Function) {
-        let size = this.subscriptions.size;
+        let size = this.callbacks.size;
         this.callbacks.add({ value, callback });
-        if(this.subscriptions.size <= size) { return false; }
+        if(this.callbacks.size <= size) { return false; }
         
         let sub = this.client.subscribe(value);
         this.subscriptions.add(sub);
 
         // Should have a handler somewhere
-        (async () => {
-            for await (const msg of sub) { 
-                console.log("New Message:", msg);
-                callback(sub, this.codec.decode(msg.data)); 
-            }
-        })();
+        (async () => { for await (const msg of sub) { callback(sub, this.codec.decode(msg.data)); } })();
 
         return true;
     }

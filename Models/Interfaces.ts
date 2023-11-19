@@ -21,7 +21,9 @@ export interface RoomData {
     id: string,
     name: string,
     users?: Set<User>,
-    connections?: number
+    connections?: number,
+    nats?: any,
+    sub?: any
 }
 
 export interface ChannelData {
