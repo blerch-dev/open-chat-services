@@ -81,6 +81,10 @@ export class Server {
         if(params?.chat === true) { 
             this.chat = new ChatServer({ server: this, listener: this.listener }); 
         }
+
+        this.app.all('*', (req, res) => {
+            res.status(404).send(`404 - Page not Found (${params.port})`)
+        });
     }
 
     public async DBFormat(force = false, attempts = 0) {
@@ -133,15 +137,23 @@ export class ChatServer {
     private wsserver = new WebSocketServer({ noServer: true });
     private rooms = new Set<Room>();
 
+    // Remove with Proper Implementation
+    private dev_sockets = new Set<WebSocket>();
+
     constructor(params: ChatServerParams) { this.Configure(params); }
 
     Configure(params: ChatServerParams) {
         params.listener.on('upgrade', (request, socket, head) => {
-            this.wsserver.handleUpgrade(request, socket, head, this.Connection);
+            this.wsserver.handleUpgrade(request, socket, head, (...args) => { this.Connection(...args); });
         });
     }
 
     Connection(client: WebSocket, request: IncomingMessage): void {
-
+        this.dev_sockets.add(client);
+        client.on('close', () => { this.dev_sockets.delete(client); })
+        client.on('message', (data) => {
+            console.log("Message:", JSON.parse(data.toString()));
+            Array.from(this.dev_sockets.values()).forEach((soc) => { soc.send(data.toString()) });
+        });
     }
 }

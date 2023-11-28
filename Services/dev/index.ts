@@ -4,35 +4,29 @@ import { Room } from "../../Models/Room";
 import { Server } from "../../Models/Server";
 import { padLeft } from "../../Utils";
 
-const log = (...args) => {
+console.time = (...args) => {
     let date = new Date();
     let time = `${padLeft(date.getHours())}:${padLeft(date.getMinutes())}:${padLeft(date.getSeconds())}:${padLeft(date.getMilliseconds(), 3)}`;
     console.log(`${time} |`, ...args);
 }
 
-const server_one = new Server({
-    port: 8000,
-    auth: true,
-    chat: true,
-    dev: true,
-    allowedDomains: ["localhost:8000"]
-});
+const ports = [8000, 8001];
+const servers = [];
 
-const server_two = new Server({
-    port: 8001,
-    auth: true,
-    chat: true,
-    dev: true,
-    allowedDomains: ["localhost:8001"]
-});
+for(let i = 0; i < ports.length; i++) {
+    servers.push(new Server({
+        port: ports[i],
+        auth: true,
+        chat: true,
+        dev: true,
+        allowedDomains: [`localhost:${ports[i]}`]
+    }))
+}
 
 // First Param Forces Drop
-server_one.DBFormat(true);
+servers[0]?.DBFormat(true);
 
-
-
-
-log("Dev Service Running...");
+console.time(`Dev Service Running on Ports: [${ports.join(', ')}]...`);
 
 // // Runs PUB SUB Test
 // const nats = { servers: 'localhost:4222' }
