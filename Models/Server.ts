@@ -143,16 +143,20 @@ export class ChatServer {
     constructor(params: ChatServerParams) { this.Configure(params); }
 
     Configure(params: ChatServerParams) {
-        params.listener.on('upgrade', (request, socket, head) => {
-            this.wsserver.handleUpgrade(request, socket, head, (...args) => { this.Connection(...args); });
+        params.listener.on('upgrade', (...params) => {
+            this.wsserver.handleUpgrade(...params, (...args) => { this.Connection(...args); });
         });
     }
 
     Connection(client: WebSocket, request: IncomingMessage): void {
+        // Get Target Room from Connection (force client specification)
+        // No Target, Get List of Targets and Close
+        // Target, Add to Target
         this.dev_sockets.add(client);
+        console.log("Headers:", (request as any).url, (request as any).headers.origin);
         client.on('close', () => { this.dev_sockets.delete(client); })
         client.on('message', (data) => {
-            console.log("Message:", JSON.parse(data.toString()));
+            // console.log("Message:", JSON.parse(data.toString()));
             Array.from(this.dev_sockets.values()).forEach((soc) => { soc.send(data.toString()) });
         });
     }
