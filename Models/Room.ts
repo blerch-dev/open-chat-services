@@ -14,19 +14,24 @@ export class Room {
 
     private data: RoomData;
     private nats: NATSClient;
+    private users: Set<User>;
+
+    public SubscriptionValue: string;
+    public SubscriptionCallback: Function;
 
     constructor(data: RoomData) {
         this.data = data;
-        this.nats = new NATSClient(data.nats ?? { port: 4222 }, data.sub ?? { value: `room-${data.id}`, callback: (sub, msg) => {
-            // console.log("Subbed MSG:", JSON.parse(msg));
-            this.dispatch(JSON.parse(msg));
-        } });
+        this.users = data?.users ?? new Set<User>();
+
+        this.SubscriptionValue = `room-${data.name ?? data.id}`;
+        const default_function = (sub, msg) => { this.dispatch(JSON.parse(msg)); }
+        this.SubscriptionCallback = data.sub?.callback ?? default_function;
     }
 
     addUser(user: User, socket: WebSocket): boolean {
         this.addSocketToUser(user, socket);
-        if(!this.data.users.has(user)) { 
-            this.data.users.add(user); 
+        if(!this.users.has(user)) { 
+            this.users.add(user); 
             return true;
         }
 
@@ -37,7 +42,7 @@ export class Room {
         let result = this.removeSocketFromUser(user, socket);
         if(result instanceof Error) { return result; }
         if(user.getSockets().size > 0) { return Error("User has Sockets Still Connected."); }
-        return this.data.users.delete(user);
+        return this.users.delete(user);
     }
 
     addSocketToUser(user: User, socket: WebSocket): boolean {
@@ -53,6 +58,6 @@ export class Room {
     }
 
     async dispatch(msg: ChatMessage) {
-        Array.from(this.data.users).forEach((user) => { user.sendToSockets(msg); });
+        Array.from(this.users).forEach((user) => { user.sendToSockets(msg); });
     }
 }

@@ -16,14 +16,17 @@ export interface UserData {
     last?: number // epoch of last long session generation (every other week)
 }
 
+import { NATSClient } from '../Data';
 import { User } from './User';
 export interface RoomData {
     id: string,
     name: string,
     users?: Set<User>,
     connections?: number,
-    nats?: any,
-    sub?: any
+    sub?: {
+        value: string,
+        callback: any
+    }
 }
 
 export interface ChannelData {
@@ -87,6 +90,7 @@ export interface ServerParams {
     dev?: boolean,
     auth?: boolean,
     chat?: boolean,
+    nats?: any,
     allowedDomains?: string[]
 }
 

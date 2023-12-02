@@ -209,18 +209,21 @@ export class User implements Model {
     private data: UserData;
     private sockets: Set<WebSocket>
 
-    constructor(data: UserData) { this.data = {
-        uuid: data?.uuid ?? null,
-        name: data?.name ?? null,
-        status: data?.status ?? 0,
-        hex: data?.hex ?? 'ffffff',
-        age: data?.age ?? Date.now(),
-        last: data?.last ?? Date.now(),
+    constructor(data: UserData) { 
+        this.sockets = new Set<WebSocket>();
+        this.data = {
+            uuid: data?.uuid ?? null,
+            name: data?.name ?? null,
+            status: data?.status ?? 0,
+            hex: data?.hex ?? 'ffffff',
+            age: data?.age ?? Date.now(),
+            last: data?.last ?? Date.now(),
 
-        auth: data?.auth ?? [],
-        subs: data?.subs ?? [],
-        roles: data?.roles ?? []
-    }; }
+            auth: data?.auth ?? [],
+            subs: data?.subs ?? [],
+            roles: data?.roles ?? []
+        }; 
+    }
 
     getID() { return this.data.uuid; }
     getName() { return this.data.name; }

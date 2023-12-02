@@ -6,6 +6,8 @@ export function ValidUUID(uuid: string) { return uuid.length === 36 }
 import { randomBytes } from 'crypto';
 export function GenerateID(bytes = 4) { return randomBytes(bytes).toString('hex'); }
 
+export function GenerateName(length = 8) { return (Math.random() + 1).toString(36).substring(length); }
+
 // Time
 export enum TimeValues {
     Second = 1000,

@@ -7,7 +7,7 @@ import * as cors from "cors";
 
 import { ServerParams, ChatServerParams, AuthServerParams, UserData, ChatMessage } from "./Interfaces";
 import { APIConnection, NATSClient } from "../Data";
-import { DatabaseResponse, sleep } from "../Utils";
+import { DatabaseResponse, GenerateID, GenerateName, GenerateUUID, sleep } from "../Utils";
 import { ChatMessageType } from "./Enums";
 import { Channel } from "./Channel";
 import { User } from "./User";
@@ -30,6 +30,9 @@ export class Server {
 
     private async Configure(params: ServerParams) {
         this.app.set('trust proxy', 1);
+
+        // Establish NATS Connection
+        this.nats = new NATSClient(params.nats ?? { servers: 'localhost:4222' });
 
         // #region Origin
         if(params.dev === true) {
@@ -102,6 +105,14 @@ export class Server {
         if(!await postTable(User.DBTableFormat(force))) { return console.log("Issue with User DB Table..."); }
         if(!await postTable(Channel.DBTableFormat(force))) { return console.log("Issue with Channel DB Table..."); }
     }
+
+    public async Publish(value: string, data: any) {
+        return await this.nats.Publish(value, data);
+    }
+
+    public async Subscribe(value: string, callback: Function) {
+        return await this.nats.Subscribe(value, callback);
+    }
 }
 
 export class AuthServer {
@@ -136,7 +147,7 @@ export class AuthServer {
 
 export class ChatServer {
     private wsserver = new WebSocketServer({ noServer: true });
-    private rooms = new Set<Room>();
+    private rooms = new Map<string, Room>();
 
     constructor(params: ChatServerParams) { this.Configure(params); }
 
@@ -144,14 +155,25 @@ export class ChatServer {
         params.listener.on('upgrade', (...params) => {
             this.wsserver.handleUpgrade(...params, (...args) => { this.Connection(...args); });
         });
+
+        // Configure Rooms
+            // Create Subs for Each Room 'SubscriptionValue' field on Room Object
+            // Call (room).dispatch for incoming messages
     }
 
     Connection(client: WebSocket, request: IncomingMessage): void {
         const user = this.GetUserFromRequest(request);
         const room = this.FindClientRoom(request);
-        if(!room?.addUser(null, client)) { 
+        if(!room?.addUser(user, client)) { 
             return client.send(JSON.stringify({ type: ChatMessageType.Error, value: "Couldn't Join Room." })); 
         }
+
+        const con_msg = { 
+            type: ChatMessageType.State, 
+            value: JSON.stringify(this.GetRoomsAsList()), 
+            meta: { list: this.GetRoomsAsList() } 
+        } as ChatMessage;
+        client.send(JSON.stringify(con_msg));
 
         client.on('message', (data) => { const msg = JSON.parse(data.toString()); room?.dispatch(msg); });
         client.on('close', () => { room?.removeSocketFromUser(user, client); });
@@ -159,10 +181,27 @@ export class ChatServer {
 
     FindClientRoom(request: IncomingMessage): Room | null {
         const { url, headers } = request; const origin = headers.origin;
+
+        // Creating Room if it doesn't Exist - Dev (Should Load from DB or MessageQueue Events)
+        if(this.rooms.has(url.substring(1))) { return this.rooms.get(url.substring(1)); }
+        else {
+            let room = new Room({ id: GenerateID(), name: url.substring(1) });
+            this.rooms.set(url.substring(1), room);
+            return room; 
+        }
+
         return null;
     }
 
     GetUserFromRequest(request: IncomingMessage): User | null {
+
+        // Random User for Testing
+        return new User({ uuid: GenerateUUID(), name: GenerateName() });
+
         return null;
+    }
+
+    GetRoomsAsList() {
+        return Array.from(this.rooms, ([id, room]) => ({ id, room }));
     }
 }
