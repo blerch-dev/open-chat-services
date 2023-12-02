@@ -1,16 +1,16 @@
 import { Server as HTTPServer, IncomingMessage, ServerResponse } from "http";
 
-import * as cors from "cors";
+import { WebSocketServer, WebSocket } from "ws";
 import * as express from "express";
 import * as session from "express-session"
-import { WebSocketServer, WebSocket } from "ws";
+import * as cors from "cors";
 
-import { ServerParams, ChatServerParams, AuthServerParams, UserData } from "./Interfaces";
-import { APIConnection } from "../Data/Query";
+import { ServerParams, ChatServerParams, AuthServerParams, UserData, ChatMessage } from "./Interfaces";
+import { APIConnection, NATSClient } from "../Data";
 import { DatabaseResponse, sleep } from "../Utils";
-import { User } from "./User";
+import { ChatMessageType } from "./Enums";
 import { Channel } from "./Channel";
-import { NATSClient } from "../Data/Message";
+import { User } from "./User";
 import { Room } from "./Room";
 
 declare module "express-session" {
@@ -24,6 +24,7 @@ export class Server {
     private listener: HTTPServer<typeof IncomingMessage, typeof ServerResponse> | undefined;
     private auth: AuthServer | undefined;
     private chat: ChatServer | undefined;
+    private nats: NATSClient | undefined;
 
     constructor(params: ServerParams) { this.Configure(params); }
 
@@ -72,7 +73,7 @@ export class Server {
         if(params?.auth === true) { 
             this.auth = new AuthServer({ server: this });
             const api = await this.auth.getAPI();
-            this.app.use(api); 
+            this.app.use(api);
         }
 
         this.listener = this.app.listen(params.port ?? 8000);
@@ -104,12 +105,12 @@ export class Server {
 }
 
 export class AuthServer {
-    private server: Server;
     private DB: APIConnection;
+    private server: Server;
 
     constructor(params: AuthServerParams) {
-        this.server = params.server;
         this.DB = new APIConnection();
+        this.server = params.server;
     }
 
     isConnected() {
@@ -137,9 +138,6 @@ export class ChatServer {
     private wsserver = new WebSocketServer({ noServer: true });
     private rooms = new Set<Room>();
 
-    // Remove with Proper Implementation
-    private dev_sockets = new Set<WebSocket>();
-
     constructor(params: ChatServerParams) { this.Configure(params); }
 
     Configure(params: ChatServerParams) {
@@ -149,15 +147,22 @@ export class ChatServer {
     }
 
     Connection(client: WebSocket, request: IncomingMessage): void {
-        // Get Target Room from Connection (force client specification)
-        // No Target, Get List of Targets and Close
-        // Target, Add to Target
-        this.dev_sockets.add(client);
-        console.log("Headers:", (request as any).url, (request as any).headers.origin);
-        client.on('close', () => { this.dev_sockets.delete(client); })
-        client.on('message', (data) => {
-            // console.log("Message:", JSON.parse(data.toString()));
-            Array.from(this.dev_sockets.values()).forEach((soc) => { soc.send(data.toString()) });
-        });
+        const user = this.GetUserFromRequest(request);
+        const room = this.FindClientRoom(request);
+        if(!room?.addUser(null, client)) { 
+            return client.send(JSON.stringify({ type: ChatMessageType.Error, value: "Couldn't Join Room." })); 
+        }
+
+        client.on('message', (data) => { const msg = JSON.parse(data.toString()); room?.dispatch(msg); });
+        client.on('close', () => { room?.removeSocketFromUser(user, client); });
+    }
+
+    FindClientRoom(request: IncomingMessage): Room | null {
+        const { url, headers } = request; const origin = headers.origin;
+        return null;
+    }
+
+    GetUserFromRequest(request: IncomingMessage): User | null {
+        return null;
     }
 }

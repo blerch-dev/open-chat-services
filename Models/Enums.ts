@@ -35,6 +35,7 @@ export enum ChatMessageType {
     Event,
     State,
     Admin,
+    Error,
     Other
 }
 

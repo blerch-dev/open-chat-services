@@ -1,3 +1,5 @@
+import { WebSocket } from "ws";
+
 import { NATSClient } from "../Data/Message";
 import { ChannelData, ChatMessage, RoomData } from "./Interfaces";
 import { User } from "./User";

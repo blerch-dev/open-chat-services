@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { QueryResult } from "pg";
+import { WebSocket } from "ws";
 
 import { ChatMessage, Model, UserData } from "./Interfaces";
 import { DatabaseResponse, GenerateUUID, HTTPResponse, ValidUUID } from "../Utils";

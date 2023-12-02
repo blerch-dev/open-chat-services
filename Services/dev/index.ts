@@ -4,7 +4,13 @@ import { Room } from "../../Models/Room";
 import { Server } from "../../Models/Server";
 import { padLeft } from "../../Utils";
 
-console.time = (...args) => {
+declare global {
+    interface Console {
+        snap: (...args) => void
+    }
+}
+
+console.snap = (...args) => {
     let date = new Date();
     let time = `${padLeft(date.getHours())}:${padLeft(date.getMinutes())}:${padLeft(date.getSeconds())}:${padLeft(date.getMilliseconds(), 3)}`;
     console.log(`${time} |`, ...args);
@@ -26,7 +32,7 @@ for(let i = 0; i < ports.length; i++) {
 // First Param Forces Drop
 servers[0]?.DBFormat(true);
 
-console.time(`Dev Service Running on Ports: [${ports.join(', ')}]...`);
+console.snap(`Dev Service Running on Ports: [${ports.join(', ')}]...`);
 
 // // Runs PUB SUB Test
 // const nats = { servers: 'localhost:4222' }
