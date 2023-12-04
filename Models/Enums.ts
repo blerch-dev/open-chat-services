@@ -21,11 +21,11 @@ export enum BadgeType {
 
 export enum RoleType {
     Other,
-    Decoration,
-    // Helper,
+    Sub,
+    Award,
+    Janitor,
     Mod,
     Bot,
-    Janitor,
     Admin,
     Owner
 }

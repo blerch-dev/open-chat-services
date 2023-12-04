@@ -8,7 +8,7 @@ import { DatabaseResponse, GenerateUUID, HTTPResponse, ValidUUID } from "../Util
 export class User implements Model {
     // #region User Creation
     static CreateFromData(data: UserData): User | Error {
-        if(data.name.length < 3 || data.name.length > 32) {
+        if(data?.name?.length < 3 || data?.name?.length > 32) {
             return Error("Name is an invalid length. Must be between 3 and 32 characters.");
         }
 
@@ -115,7 +115,7 @@ export class User implements Model {
 
         route.get('/me', async (req, res, next) => {
             // If Session, Fetch From DB, Refresh Session with Data, Return Data
-            console.log("User Session:", req.session.user);
+            // console.log("User Session:", req.session.user);
             if(req.session.user) {
                 // Refresh from DB
                 let result = await callback('SELECT * FROM users WHERE uuid = $1', [req.session.user.uuid]);
@@ -221,7 +221,8 @@ export class User implements Model {
 
             auth: data?.auth ?? [],
             subs: data?.subs ?? [],
-            roles: data?.roles ?? []
+            roles: data?.roles ?? [],
+            badges: this.data?.badges ?? []
         }; 
     }
 
@@ -239,7 +240,8 @@ export class User implements Model {
 
             auth: this.data?.auth ?? [],
             subs: this.data?.subs ?? [],
-            roles: this.data?.roles ?? []
+            roles: this.data?.roles ?? [],
+            badges: this.data?.badges ?? []
         } as UserData;
     }
 
@@ -258,5 +260,11 @@ export class User implements Model {
     async sendToSockets(msg: ChatMessage) {
         let str = JSON.stringify(msg);
         Array.from(this.sockets).forEach((socket) => { socket.send(str); });
+    }
+
+    hasRolePermission(role: number, channel_id?: string) {
+        // channel_id should be undefined for global lookup and roles
+        // needs testing for sure, but should work as expected (both for channel defined and undefined)
+        return this.data.roles.filter(v => (v.channel_id === channel_id || v.channel_id === undefined) && v.type >= role).length > 0;
     }
 }

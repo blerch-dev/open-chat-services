@@ -11,6 +11,7 @@ export interface UserData {
     auth?: PlatformConnection[],
     subs?: Subscription[],
     roles?: Role[],
+    badges?: Badge[], // adge list are special state badges (pepe vs yee, seasonal, think twitch turbo badge, always global)
     hex?: string, // color in chats without class system
     age?: number // epoch ts from account creation
     last?: number // epoch of last long session generation (every other week)
@@ -43,6 +44,8 @@ export interface ChannelData {
         rumble?: string
     },
 
+    subs?: [], // list of sub levels (dynamic amount)
+
     badges?: Badge[],
     emotes?: Emote[],
     roles?: (Role)[]
@@ -58,28 +61,29 @@ export interface PlatformConnection {
 
 import { SubscriptionType } from './Enums';
 export interface Subscription {
+    id: string, // id for db storage
     type: SubscriptionType,
     date: number, // epoch ts from sub start
     length: number // add to date to find expire
 }
 
 export interface Badge {
-    id: number,
+    id: string, // id for db storage
     icon: string, // link to icon
-    name: string,
-    channel_id?: string
+    name: string
 }
 
 import { RoleType } from './Enums';
 export interface Role {
-    id: number,
+    id: string, // id for db storage
     type: RoleType,
     badge: Badge,
     name: string,
-    channel_id?: string
+    channel_id?: string // if empty, global
 }
 
 export interface Emote {
+    id: string, // id for db storage
     icon: string, // link to icon
     name: string,
     channel_id?: string

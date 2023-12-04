@@ -57,7 +57,9 @@ export class Room {
         }
     }
 
-    async dispatch(msg: ChatMessage) {
-        Array.from(this.users).forEach((user) => { user.sendToSockets(msg); });
+    async dispatch(msg: ChatMessage, min_role_type = 0) {
+        Array.from(this.users).forEach((user) => {
+            if(min_role_type === 0 || user.hasRolePermission(min_role_type, this.data.id)) { user.sendToSockets(msg); }
+        });
     }
 }

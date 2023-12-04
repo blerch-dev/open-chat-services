@@ -1,13 +1,13 @@
 import { Server as HTTPServer, IncomingMessage, ServerResponse } from "http";
 
 import { WebSocketServer, WebSocket } from "ws";
-import * as express from "express";
 import * as session from "express-session"
+import * as express from "express";
 import * as cors from "cors";
 
 import { ServerParams, ChatServerParams, AuthServerParams, UserData, ChatMessage } from "./Interfaces";
-import { APIConnection, NATSClient } from "../Data";
 import { DatabaseResponse, GenerateID, GenerateName, GenerateUUID, sleep } from "../Utils";
+import { APIConnection, NATSClient, RedisClient } from "../Data";
 import { ChatMessageType } from "./Enums";
 import { Channel } from "./Channel";
 import { User } from "./User";
@@ -20,13 +20,25 @@ declare module "express-session" {
 }
 
 export class Server {
+    private params: ServerParams;
+
     private app = express();
     private listener: HTTPServer<typeof IncomingMessage, typeof ServerResponse> | undefined;
     private auth: AuthServer | undefined;
     private chat: ChatServer | undefined;
     private nats: NATSClient | undefined;
 
-    constructor(params: ServerParams) { this.Configure(params); }
+    private redis: RedisClient | undefined;
+
+    private sessionParser;
+
+    constructor(params: ServerParams) {
+        this.params = params;
+
+        this.redis = new RedisClient();
+
+        this.Configure(params);
+    }
 
     private async Configure(params: ServerParams) {
         this.app.set('trust proxy', 1);
@@ -37,7 +49,8 @@ export class Server {
         // #region Origin
         if(params.dev === true) {
             this.app.use((req, res, next) => {
-                req.headers.origin = req.headers.origin || req.headers.host; return next();
+                req.headers.original_origin = req.headers?.origin;
+                req.headers.origin = req.headers?.origin || req.headers?.host; return next();
             });
         }
 
@@ -52,6 +65,11 @@ export class Server {
                     return callback(null, true); 
                 }
 
+                // Allows Localhost
+                if(args.length >= 1 && args[args.length - 1].includes('localhost:')) {
+                    return callback(null, true);
+                }
+
                 if(params.dev === true) { console.log("Invalid Origin:", origin); }
                 return callback(new Error("Invalid Origin"));
 
@@ -64,12 +82,16 @@ export class Server {
         // #region Session and Validation
         this.app.use(express.urlencoded({ extended: true }));
         this.app.use(express.json());
-        this.app.use(session({
+
+        this.sessionParser = session({
+            store: RedisClient.GenerateStore(this.redis),
             secret: 'test',
             resave: false,
             saveUninitialized: false,
             cookie: { httpOnly: true }
-        }));
+        });
+
+        this.app.use(this.sessionParser);
         // #endregion
 
         // Auth Server
@@ -113,6 +135,10 @@ export class Server {
     public async Subscribe(value: string, callback: Function) {
         return await this.nats.Subscribe(value, callback);
     }
+
+    public ParseSession(request: IncomingMessage) {
+
+    }
 }
 
 export class AuthServer {
@@ -130,7 +156,7 @@ export class AuthServer {
 
     async getAPI() {
         const API = express.Router();
-
+        
         // User Model - Requires Lambda to Keep Context
         API.use('/user', User.getAPIRouter((...args) => { return this.DB.Query(...args); }));
 
@@ -148,8 +174,12 @@ export class AuthServer {
 export class ChatServer {
     private wsserver = new WebSocketServer({ noServer: true });
     private rooms = new Map<string, Room>();
+    private server;
 
-    constructor(params: ChatServerParams) { this.Configure(params); }
+    constructor(params: ChatServerParams) {
+        this.server = params.server;
+        this.Configure(params); 
+    }
 
     Configure(params: ChatServerParams) {
         params.listener.on('upgrade', (...params) => {
@@ -163,9 +193,13 @@ export class ChatServer {
 
     Connection(client: WebSocket, request: IncomingMessage): void {
         const user = this.GetUserFromRequest(request);
+        if(!(user instanceof User)) {
+            return client.send(JSON.stringify({ type: ChatMessageType.State, value: "Log in to chat." }));
+        }
+
         const room = this.FindClientRoom(request);
         if(!room?.addUser(user, client)) { 
-            return client.send(JSON.stringify({ type: ChatMessageType.Error, value: "Couldn't Join Room." })); 
+            return client.send(JSON.stringify({ type: ChatMessageType.Error, value: "Couldn't join target room." })); 
         }
 
         const con_msg = { 
@@ -194,11 +228,8 @@ export class ChatServer {
     }
 
     GetUserFromRequest(request: IncomingMessage): User | null {
-
-        // Random User for Testing
-        return new User({ uuid: GenerateUUID(), name: GenerateName() });
-
-        return null;
+        const user = User.CreateFromData(this.server.ParseSession(request));
+        return user instanceof User ? user : null;
     }
 
     GetRoomsAsList() {
