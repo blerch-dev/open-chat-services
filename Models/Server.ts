@@ -8,6 +8,7 @@ import * as cors from "cors";
 import { ServerParams, ChatServerParams, AuthServerParams, UserData, ChatMessage } from "./Interfaces";
 import { DatabaseResponse, GenerateID, GenerateName, GenerateUUID, sleep } from "../Utils";
 import { APIConnection, NATSClient, RedisClient } from "../Data";
+import { PlatformManager } from "./Connection";
 import { ChatMessageType } from "./Enums";
 import { Channel } from "./Channel";
 import { User } from "./User";
@@ -26,15 +27,17 @@ export class Server {
     private listener: HTTPServer<typeof IncomingMessage, typeof ServerResponse> | undefined;
     private auth: AuthServer | undefined;
     private chat: ChatServer | undefined;
-    private nats: NATSClient | undefined;
 
-    private redis: RedisClient | undefined;
+    private nats: NATSClient;
+    private redis: RedisClient;
 
     private sessionParser;
 
     constructor(params: ServerParams) {
         this.params = params;
 
+        // Session/Message Services (External)
+        this.nats = new NATSClient(params.nats ?? { servers: 'localhost:4222' });
         this.redis = new RedisClient();
 
         this.Configure(params);
@@ -42,9 +45,6 @@ export class Server {
 
     private async Configure(params: ServerParams) {
         this.app.set('trust proxy', 1);
-
-        // Establish NATS Connection
-        this.nats = new NATSClient(params.nats ?? { servers: 'localhost:4222' });
 
         // #region Origin
         if(params.dev === true) {
@@ -145,9 +145,13 @@ export class AuthServer {
     private DB: APIConnection;
     private server: Server;
 
+    private oauth: PlatformManager;
+
     constructor(params: AuthServerParams) {
         this.DB = new APIConnection();
         this.server = params.server;
+
+        this.oauth = new PlatformManager();
     }
 
     isConnected() {
@@ -156,7 +160,7 @@ export class AuthServer {
 
     async getAPI() {
         const API = express.Router();
-        
+
         // User Model - Requires Lambda to Keep Context
         API.use('/user', User.getAPIRouter((...args) => { return this.DB.Query(...args); }));
 

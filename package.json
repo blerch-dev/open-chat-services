@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "start": "ts-node Services/dev"
+    "start": "node -r ts-node/register --env-file=.env Services/Dev"
   },
   "dependencies": {
     "@types/express": "^4.17.18",
