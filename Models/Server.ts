@@ -16,7 +16,8 @@ import { Room } from "./Room";
 
 declare module "express-session" {
     interface SessionData {
-        user: UserData
+        user: UserData,
+        state: any
     }
 }
 
@@ -166,6 +167,9 @@ export class AuthServer {
 
         // Channel Model - Requires Lambda to Keep Context
         API.use('/channel', Channel.getAPIRouter((...args) => { return this.DB.Query(...args); }));
+
+        // OAuth
+        API.use('/oauth', this.oauth.GetRouter());
 
         return API;
     }
