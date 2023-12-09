@@ -21,9 +21,29 @@ declare module "express-session" {
     }
 }
 
+export class GatewayServer {
+    constructor(data: { port: number, domains?: string[], dev?: boolean, services?: Server[] }) {
+        const domains = data?.domains ?? [];
+        if(data.dev === true) { domains.push(`http://*.localhost:${data.port}`); }
+
+        const app = express();
+        // Limit Access to Gateway from Specific Domains (Allow All For Now)
+        app.use(cors({ origin: domains }));
+
+        // Map Domains Here
+        app.use('*', (req, res, next) => {
+            // console.log("Gateway Data:", req.headers.host);
+            res.end();
+        });
+
+        app.listen(data.port ?? 80);
+    }
+}
+
 export class Server {
     private params: ServerParams;
 
+    private dev: boolean;
     private app = express();
     private listener: HTTPServer<typeof IncomingMessage, typeof ServerResponse> | undefined;
     private auth: AuthServer | undefined;
@@ -36,6 +56,7 @@ export class Server {
 
     constructor(params: ServerParams) {
         this.params = params;
+        this.dev = params?.dev ?? process.env.NODE_ENV === 'dev' ?? false;
 
         // Session/Message Services (External)
         this.nats = new NATSClient(params.nats ?? { servers: 'localhost:4222' });
@@ -48,12 +69,15 @@ export class Server {
         this.app.set('trust proxy', 1);
 
         // #region Origin
-        if(params.dev === true) {
+        if(this.dev === true) {
             this.app.use((req, res, next) => {
                 req.headers.original_origin = req.headers?.origin;
                 req.headers.origin = req.headers?.origin || req.headers?.host; return next();
             });
         }
+
+        // Auto Port Assigning for Localhost
+        params.allowedDomains = params.allowedDomains.map((dom) => dom === 'localhost' ? `${dom}:${params.port}` : dom);
 
         this.app.use(cors({
             origin: (origin, callback) => {
@@ -67,11 +91,11 @@ export class Server {
                 }
 
                 // Allows Localhost
-                if(args.length >= 1 && args[args.length - 1].includes('localhost:')) {
+                if(this.dev && args.length >= 1 && args[args.length - 1].includes('localhost:')) {
                     return callback(null, true);
                 }
 
-                if(params.dev === true) { console.log("Invalid Origin:", origin); }
+                if(this.dev === true) { console.snap("Invalid Origin:", origin); }
                 return callback(new Error("Invalid Origin"));
 
                 // check db for channel domains, return true if acceptable - todo
@@ -114,8 +138,10 @@ export class Server {
         });
     }
 
+    public GetAllowedDomains() { return this.params.allowedDomains; }
+
     public async DBFormat(force = false, attempts = 0) {
-        if(!this.auth || attempts >= 10) { return console.log("Could Not Connect to DB..."); }
+        if(!this.auth || attempts >= 10) { return this.dev ? console.snap("Could Not Connect to DB...") : null; }
         if(!this.auth.isConnected() && attempts < 10) {
             await sleep(100); return await this.DBFormat(force, attempts + 1);
         }
@@ -125,8 +151,8 @@ export class Server {
             return true;
         }
 
-        if(!await postTable(User.DBTableFormat(force))) { return console.log("Issue with User DB Table..."); }
-        if(!await postTable(Channel.DBTableFormat(force))) { return console.log("Issue with Channel DB Table..."); }
+        if(!await postTable(User.DBTableFormat(force))) { return this.dev ? console.snap("Issue with User DB Table...") : null; }
+        if(!await postTable(Channel.DBTableFormat(force))) { return this.dev ? console.snap("Issue with Channel DB Table...") : null; }
     }
 
     public async Publish(value: string, data: any) {

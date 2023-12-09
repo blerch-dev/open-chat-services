@@ -1,5 +1,8 @@
 import { Router } from "express";
 
+import { Channel } from "./Channel";
+import { User } from "./User";
+
 export class PlatformManager {
     private twitch: TwitchOAuth;
     private youtube: YoutubeOAuth;
@@ -44,32 +47,32 @@ export class TwitchOAuth extends OAuth {
         this.dev = params?.dev ?? false;
     }
 
-    public Authenticate(data: { origin: string }) {
-        let redirect_url = `http${this.dev ? '' : 's'}://${data.origin}/oauth/twitch/auth`
-        let auth_url = `https://id.twitch.tv/oauth2/authorize?client_id=${this.client.id}` +
-            `&redirect_uri=${redirect_url}&response_type=code` + 
-            `&scope=user:read:subscriptions+channel:read:polls+channel:read:subscriptions` +
-            `+channel:read:vips+moderation:read+moderator:read:blocked_terms+chat:edit+chat:read` + 
-            `&state=twitch`;
+    public Authenticate(data: { origin: string }): string {
+        let auth_url = `https://id.twitch.tv/oauth2/authorize?client_id=${this.client.id}
+            &redirect_uri=http${this.dev ? '' : 's'}://${data.origin}/oauth/twitch/auth
+            &response_type=code 
+            &scope=user:read:subscriptions+channel:read:polls+channel:read:subscriptions
+            +channel:read:vips+moderation:read+moderator:read:blocked_terms+chat:edit+chat:read
+            &state=twitch
+            `.replace(/\s/g,'');
 
-        console.log("Redirect URL:", redirect_url);
         return auth_url;
     }
 
     // Break Into Functions
-    public async Verify(data: { code: string, origin: string }) {
+    public async Verify(data: { code: string, origin: string }): Promise<{ user: User, fresh: boolean} | Error> {
         let validate_url = `https://id.twitch.tv/oauth2/token?client_id=${this.client.id}
             &client_secret=${this.client.secret}
             &code=${data.code}
             &grant_type=authorization_code
-            &redirect_uri=http${this.dev ? '' : 's'}://${data.origin}/oauth/twitch/verify`.replace(/\s/g,'');
+            &redirect_uri=http${this.dev ? '' : 's'}://${data.origin}/oauth/twitch/auth
+            `.replace(/\s/g,'');
 
         let validation = await fetch(validate_url, { method: 'POST', headers: {
             'Content-Type': 'application/vnd.twitchtv.v3+json'
         } });
 
         let json = await validation.json();
-        console.log("Twitch Access:", json);
 
         let result = await fetch('https://api.twitch.tv/helix/users', {
             headers: {
@@ -78,20 +81,21 @@ export class TwitchOAuth extends OAuth {
             }
         });
 
-        json = await result.json();
-        console.log("Twitch Raw Data:", json);
+        return await this.GetUserFromData(await result.json());
+    }
 
+    private async GetUserFromData(json: any): Promise<{ user: User, fresh: boolean} | Error> {
         const twitch_data = Array.isArray(json?.data) && json?.data[0]?.id !== undefined ? json.data[0] : null;
-        console.log("Twitch Data:", twitch_data);
-        return twitch_data;
+
+        let result = await (await fetch('http://localhost:8000/user/connection/twitch/test')).json();
+        console.log("Self Search:", result);
+
+        return new Error();
         // check db for user related
-        // apply session to request, return everything
     }
 
     public Handler() {
         let route = Router();
-
-        route.all('*', (req, res, next) => { console.snap("Hit Twitch Auth Flow:", req.headers.origin); next(); })
 
         route.get('/', (req, res, next) => { 
             req.session.state = { origin: req.headers.origin }
@@ -100,16 +104,17 @@ export class TwitchOAuth extends OAuth {
 
         route.get('/auth', async (req, res, next) => {
             // should be user or error
-            let data = await this.Verify({ code: req.query.code as string, origin: req.session.state ?? req.headers.origin });
+            let user = await this.Verify({ code: req.query.code as string, origin: req.session?.state?.origin ?? req.headers.origin });
             res.end();
-        });
 
-        route.get('/verify', async (req, res, next) => {
-            console.log("Hit Verify Route!");
-            res.end();
+            // apply session to request, return everything
         });
 
         return route;
+    }
+
+    public UserSubbedToChannel(user: User, Channel: Channel) {
+
     }
 }
 

@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "start": "node -r ts-node/register --env-file=.env Services/Dev"
+    "start": "node -r ts-node/register --env-file=.env Scripts/Dev -a 8000 -c 8001,8002 -d app.tv"
   },
   "dependencies": {
     "@types/express": "^4.17.18",
@@ -11,6 +11,8 @@
     "cors": "^2.8.5",
     "express": "^4.18.2",
     "express-session": "^1.17.3",
+    "http-proxy": "^1.18.1",
+    "http-proxy-middleware": "^2.0.6",
     "nats": "^2.18.0",
     "pg": "^8.11.3",
     "redis": "^4.6.11",

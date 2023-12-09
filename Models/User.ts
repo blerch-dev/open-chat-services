@@ -137,6 +137,7 @@ export class User implements Model {
             return res.json({ error: { code: 401, message: "No User Session Data" } } as DatabaseResponse);
         });
 
+        // Might Gate User Search to Mod/Bot Roles and Above, Open for Now
         route.get('/id/:id', async (req, res, next) => {
             let result = await callback('SELECT * FROM users WHERE uuid = $1', [req.params.id]);
             return res.json({ results: result.rows, meta: {} } as DatabaseResponse);
@@ -146,7 +147,7 @@ export class User implements Model {
             let result = await callback('SELECT * FROM users WHERE uuid::text LIKE $1 OR name ILIKE $1', [req.params.search]);
             return res.json({ results: result.rows, meta: {} } as DatabaseResponse);
         });
-        
+
         route.post('/create', async (req, res, next) => {
             // Parses Form Body
             let result = await User.FormValidation(req.body);
@@ -173,6 +174,20 @@ export class User implements Model {
                 // Handle Error
                 return res.status(result.code).json(result);
             }
+        });
+
+        // Connections
+        route.get('/connection/:user_id', async (req, res, next) => {
+            // gets all connections
+        })
+
+        route.post('/connection/:platform', async (req, res, next) => {
+
+        });
+
+        route.get('/connection/:platform/:platform_id', async (req, res, next) => {
+            // let result = await callback('SELECT * ')
+            res.json({ self: true, platform: req.params.platform, platform_id: req.params.platform_id });
         });
 
         return route;

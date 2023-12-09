@@ -1,5 +1,14 @@
-import { Server } from "../Models/Server";
+// Custom - Low Dep Gateway for Domain/Service Filtering
+    // Cookie for Filtering to Previous Results
 
-const app = new Server({
-    port: 8000
-});
+import { GatewayServer, Server } from "../Models/Server";
+
+export class GatewayService extends GatewayServer {
+
+    public ServiceType: () => string;
+
+    constructor(port: number, domains?: string[], dev?: boolean, services?: Server[]) {
+        super({ port, domains, dev, services });
+        this.ServiceType = () => { return `Gateway Service on Port: ${port}` }
+    }
+}
