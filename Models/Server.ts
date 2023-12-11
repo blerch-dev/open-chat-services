@@ -1,6 +1,7 @@
-import { Server as HTTPServer, IncomingMessage, ServerResponse } from "http";
+import { Server as HTTPServer, IncomingMessage, ServerResponse, createServer } from "http";
 
 import { WebSocketServer, WebSocket } from "ws";
+import { createProxyServer } from "http-proxy";
 import * as session from "express-session"
 import * as express from "express";
 import * as cors from "cors";
@@ -22,21 +23,26 @@ declare module "express-session" {
 }
 
 export class GatewayServer {
+    private proxy = createProxyServer({});
+    private server;
+
     constructor(data: { port: number, domains?: string[], dev?: boolean, services?: Server[] }) {
         const domains = data?.domains ?? [];
         if(data.dev === true) { domains.push(`http://*.localhost:${data.port}`); }
 
-        const app = express();
-        // Limit Access to Gateway from Specific Domains (Allow All For Now)
-        app.use(cors({ origin: domains }));
+        // Works
+        this.server = createServer((req, res) => {
+            console.log("Req Origin:", req.headers.origin);
 
-        // Map Domains Here
-        app.use('*', (req, res, next) => {
-            // console.log("Gateway Data:", req.headers.host);
+            for(let i = 0; i < data.services.length; i++) {
+                if(data.services[i].GetAllowedDomains().includes(req.headers.host)) {
+                    this.proxy.web(req, res, { target: `${data.services[i].GetLocalDomain()}` });
+                    return;
+                }
+            }
+
             res.end();
-        });
-
-        app.listen(data.port ?? 80);
+        }).listen(data.port ?? 80);
     }
 }
 
@@ -119,6 +125,9 @@ export class Server {
         this.app.use(this.sessionParser);
         // #endregion
 
+        // Server Info
+        this.app.get('/server', (req, res, next) => { res.json({ server: this.params }); });
+
         // Auth Server
         if(params?.auth === true) { 
             this.auth = new AuthServer({ server: this });
@@ -139,6 +148,9 @@ export class Server {
     }
 
     public GetAllowedDomains() { return this.params.allowedDomains; }
+
+    public GetLocalDomain() { return `http://localhost:${this.params.port}`; }
+    public GetLocalPort() { return this.params.port; }
 
     public async DBFormat(force = false, attempts = 0) {
         if(!this.auth || attempts >= 10) { return this.dev ? console.snap("Could Not Connect to DB...") : null; }

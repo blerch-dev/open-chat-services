@@ -35,7 +35,7 @@ target.chat.forEach((port) => {
 });
 
 // Gateway (Required) - Domain Here is Origin List
-target.servers.push(new GatewayService(80, domain, true, [...target.servers]));
+target.servers.push(new GatewayService(80, [domain], true, [...target.servers]));
 
 console.snap(`Dev Services\n - ${target.servers.map(s => s.ServiceType()).join('\n - ')}`);
 
