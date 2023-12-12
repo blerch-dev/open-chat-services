@@ -7,8 +7,8 @@ export class GatewayService extends GatewayServer {
 
     public ServiceType: () => string;
 
-    constructor(port: number, domains?: string[], dev?: boolean, services?: Server[]) {
-        super({ port, domains, dev, services });
+    constructor(port: number, domains?: string[], dev?: boolean, services?: Server[], map?: Map<string, string[]>) {
+        super({ port, domains, dev, services, map });
         this.ServiceType = () => { return `Gateway Service on Port: ${port}` }
     }
 }

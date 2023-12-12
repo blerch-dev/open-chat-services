@@ -24,25 +24,66 @@ declare module "express-session" {
 
 export class GatewayServer {
     private proxy = createProxyServer({});
-    private server;
+    private server: HTTPServer;
+    private map: Map<string, { domains: string[], index: number }>;
 
-    constructor(data: { port: number, domains?: string[], dev?: boolean, services?: Server[] }) {
+    constructor(data: { 
+        port: number, 
+        domains?: string[], 
+        dev?: boolean, 
+        services?: Server[], 
+        map?: Map<string, string[]> // make this a string[], string[] and map all combos - TODO
+    }) {
         const domains = data?.domains ?? [];
         if(data.dev === true) { domains.push(`http://*.localhost:${data.port}`); }
+        this.map = this.generateDomainMap(data.services, data.map);
 
-        // Works
+        // Works - Domains Above for CORS on Gateway - Open to all currently
+            // Requires Exact String, Will Add Regex Support Later
         this.server = createServer((req, res) => {
-            console.log("Req Origin:", req.headers.origin);
+            // console.log("Req Origin:", req.headers.origin);
+            // if(req.rawHeaders.includes('websocket')) { console.log("WS Request::", req.headers); } // issue with sockets not connecting/wrong url
 
-            for(let i = 0; i < data.services.length; i++) {
-                if(data.services[i].GetAllowedDomains().includes(req.headers.host)) {
-                    this.proxy.web(req, res, { target: `${data.services[i].GetLocalDomain()}` });
-                    return;
-                }
-            }
+            let gate = this.map.get(req.headers.host);
+            if(gate === undefined) { return res.writeHead(404, "No Target Domain for Give Host.").end(); }
 
-            res.end();
+            let target_domain = gate.domains[gate.index];
+            if(gate.index + 1 >= gate.domains.length) { gate.index = 0 } else { gate.index += 1; }
+            this.proxy.web(req, res, { target: `${target_domain}` });
         }).listen(data.port ?? 80);
+    }
+
+    getDomainMap() { return this.map; }
+
+    generateDomainMap(services?: Server[], map_input?: Map<string, string[]>) {
+        let map = new Map() as Map<string, { domains: string[], index: number }>;
+
+        // Auto Finds from Services
+        let domain_relations: [string, string[]][] = map_input ? [...Array.from(map_input.entries())] : [];
+        for(let i = 0; i < services.length; i++) {
+            let _map = this.filterMapGrouping(services[i].GetAllowedDomains(), services[i].GetLocalDomain());
+            domain_relations.push(...Array.from(_map.entries()));
+        }
+
+        // Maps Domains To All Input/Target Combos and Initializes Index Value
+        for(let i = 0; i < domain_relations.length; i++) {
+            let group = map.get(domain_relations[i][0])?.domains ?? [];
+            map.set(domain_relations[i][0], { domains: [...group, ...domain_relations[i][1]], index: 0 })
+        }
+
+        console.log(map);
+        return map;
+    }
+
+    private filterMapGrouping(domain_list, target_domain) {
+        let map = new Map<string, string[]>();
+        for(let i = 0; i < domain_list.length; i++) {
+            let group = [target_domain];
+            if(map.has(domain_list[i])) { group = [...map.get(domain_list[i]), target_domain] } 
+            map.set(domain_list[i], group);
+        }
+
+        return map;
     }
 }
 
@@ -101,8 +142,8 @@ export class Server {
                     return callback(null, true);
                 }
 
-                if(this.dev === true) { console.snap("Invalid Origin:", origin); }
-                return callback(new Error("Invalid Origin"));
+                // if(this.dev === true) { console.snap("Invalid Origin:", origin); }
+                return callback(new Error(`${console.getSnapTime()} | Invalid Origin: ${origin}`));
 
                 // check db for channel domains, return true if acceptable - todo
                 //callback(null, true);

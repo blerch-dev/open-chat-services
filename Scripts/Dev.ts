@@ -5,15 +5,20 @@ import { padLeft } from "../Utils";
 declare global {
     interface Console {
         snap: (...args) => void,
+        getSnapTime: () => string,
         custom: (...args) => void
     }
 }
 
-// Logs to Terminal - Prod will Log to File
-console.snap = (...args) => {
+console.getSnapTime = () => {
     let date = new Date();
     let time = `${padLeft(date.getHours())}:${padLeft(date.getMinutes())}:${padLeft(date.getSeconds())}:${padLeft(date.getMilliseconds(), 3)}`;
-    console.log(`${time} |`, ...args);
+    return time;
+}
+
+// Logs to Terminal - Prod will Log to File
+console.snap = (...args) => {
+    console.log(`${console.getSnapTime()} |`, ...args);
 }
 
 let target = { auth: [], chat: [], servers: [] }
@@ -35,7 +40,8 @@ target.chat.forEach((port) => {
 });
 
 // Gateway (Required) - Domain Here is Origin List
-target.servers.push(new GatewayService(80, [domain], true, [...target.servers]));
+let ui_map = new Map(); ui_map.set('www.gigachad.city', ['http://localhost:4321']);
+target.servers.push(new GatewayService(80, [domain], true, [...target.servers], ui_map));
 
 console.snap(`Dev Services\n - ${target.servers.map(s => s.ServiceType()).join('\n - ')}`);
 
