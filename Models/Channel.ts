@@ -50,13 +50,19 @@ export class Channel implements Model {
                 "name"          varchar(32),
                 "domain"        varchar(256),
                 "icon"          varchar(256),
+                "creation"      timestamp without time zone NOT NULL DEFAULT NOW(),
+                "last_active"   timestamp without time zone NOT NULL DEFAULT NOW(),
+                PRIMARY KEY ("id")
+            );
+
+            ${drop === true ? 'DROP TABLE IF EXISTS "channel_connections";' : ''}
+            CREATE TABLE IF NOT EXISTS "channel_connections" (
+                "channel_id"    varchar(32) NOT NULL UNIQUE,
                 "twitch_id"     varchar(64),
                 "youtube_id"    varchar(64),
                 "kick_id"       varchar(64),
-                "rumble_id"     varchar(64), ${ /* Should move ids to own column type */ ''}
-                "creation"      timestamp NOT NULL DEFAULT NOW(),
-                "last_active"   timestamp NOT NULL DEFAULT NOW(),
-                PRIMARY KEY ("id")
+                "rumble_id"     varchar(64),
+                PRIMARY KEY ("channel_id")
             );
 
             ${drop === true ? 'DROP TABLE IF EXISTS "roles";' : ''}
@@ -70,22 +76,21 @@ export class Channel implements Model {
                 PRIMARY KEY ("id")
             );
 
+            ${drop === true ? 'DROP TABLE IF EXISTS "subscriptions";' : '' /* Level = ID Equiv, with type mod (100, 200, 201) */}
+            CREATE TABLE IF NOT EXISTS "subscriptions" (
+                "id"            serial NOT NULL UNIQUE,
+                "level"         smallint NOT NULL,
+                "name"          varchar(64) NOT NULL,
+                "badge_id"      int NOT NULL,
+                "channel_id"    varchar(32),
+                PRIMARY KEY ("id")
+            );
+
             ${drop === true ? 'DROP TABLE IF EXISTS "badges";' : ''}
             CREATE TABLE IF NOT EXISTS "badges" (
                 "id"            serial NOT NULL UNIQUE,
                 "name"          varchar(32) NOT NULL,
                 "icon"          varchar(256) NOT NULL,
-                "channel_id"    varchar(32),
-                PRIMARY KEY ("id")
-            );
-
-            ${drop === true ? 'DROP TABLE IF EXISTS "subscriptions";' : ''}
-            CREATE TABLE IF NOT EXISTS "subscriptions" (
-                "id"            serial NOT NULL UNIQUE,
-                "ower_uuid"     uuid NOT NULL,
-                "level"         smallint NOT NULL DEFAULT 100,
-                "creation"           timestamp NOT NULL DEFAULT NOW(),
-                "expiration"          timestamp NOT NULL DEFAULT NOW(),
                 "channel_id"    varchar(32),
                 PRIMARY KEY ("id")
             );

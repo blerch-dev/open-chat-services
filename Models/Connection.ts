@@ -97,7 +97,7 @@ export class TwitchOAuth extends OAuth {
         console.log("Twitch Data:", twitch_data);
 
         // Needs better url set up
-        return await (await fetch('http://localhost:8000/user/connection/twitch/test')).json();
+        return await (await fetch(`http://auth.app.tv/user/connection/twitch/${twitch_data.id}`)).json();
     }
 
     public Handler() {

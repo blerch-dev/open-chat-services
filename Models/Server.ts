@@ -1,4 +1,5 @@
 import { Server as HTTPServer, IncomingMessage, ServerResponse, createServer } from "http";
+import { Server as HTTPSServer, createServer as createSecureServer } from 'https';
 
 import { WebSocketServer, WebSocket } from "ws";
 import { createProxyServer } from "http-proxy";
@@ -24,7 +25,10 @@ declare module "express-session" {
 
 export class GatewayServer {
     private proxy = createProxyServer({});
+
     private server: HTTPServer;
+    private sercure_server: HTTPSServer;
+
     private map: Map<string, { domains: string[], index: number }>;
 
     constructor(data: { 
@@ -38,9 +42,7 @@ export class GatewayServer {
         if(data.dev === true) { domains.push(`http://*.localhost:${data.port}`); }
         this.map = this.generateDomainMap(data.services, data.map);
 
-        // Works - Domains Above for CORS on Gateway - Open to all currently
-            // Requires Exact String, Will Add Regex Support Later
-        this.server = createServer((req, res) => {
+        const handle_proxy = (req, res) => {
             // console.log("Req Origin:", req.headers.origin);
             // if(req.rawHeaders.includes('websocket')) { console.log("WS Request::", req.headers); } // issue with sockets not connecting/wrong url
 
@@ -50,7 +52,12 @@ export class GatewayServer {
             let target_domain = gate.domains[gate.index];
             if(gate.index + 1 >= gate.domains.length) { gate.index = 0 } else { gate.index += 1; }
             this.proxy.web(req, res, { target: `${target_domain}` });
-        }).listen(data.port ?? 80);
+        }
+
+        // Works - Domains Above for CORS on Gateway - Open to all currently
+            // Requires Exact String, Will Add Regex Support Later
+        this.server = createServer(handle_proxy).listen(data.port ?? 80);
+        this.sercure_server = createSecureServer(handle_proxy).listen(443);
     }
 
     getDomainMap() { return this.map; }

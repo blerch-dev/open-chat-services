@@ -43,49 +43,52 @@ export class User implements Model {
                 "name"          varchar(32) NOT NULL UNIQUE,
                 "status"        smallint NOT NULL DEFAULT 0,
                 "hex"           varchar(6) NOT NULL DEFAULT 'ffffff',
-                "creation"      timestamp NOT NULL DEFAULT NOW(),
-                "last_active"   timestamp NOT NULL DEFAULT NOW(),
+                "creation"      timestamp without time zone NOT NULL DEFAULT NOW(),
+                "last_active"   timestamp without time zone NOT NULL DEFAULT NOW(),
                 PRIMARY KEY ("uuid")
             );
 
             ${drop === true ? 'DROP TABLE IF EXISTS "user_twitch_connection";' : ''}
             CREATE TABLE IF NOT EXISTS "user_twitch_connection" (
                 "uuid"          uuid NOT NULL UNIQUE,
-                "twitch_id"     varchar(64) UNIQUE,
-                "twitch_name"   varchar(32),
+                "id"            varchar(64) UNIQUE,
+                "name"          varchar(32),
                 PRIMARY KEY ("uuid")
             );
 
             ${drop === true ? 'DROP TABLE IF EXISTS "user_youtube_connection";' : ''}
             CREATE TABLE IF NOT EXISTS "user_youtube_connection" (
                 "uuid"          uuid NOT NULL UNIQUE,
-                "youtube_id"    varchar(64) UNIQUE,
-                "youtube_name"  varchar(32),
+                "id"            varchar(64) UNIQUE,
+                "name"          varchar(32),
                 PRIMARY KEY ("uuid")
             );
 
             ${drop === true ? 'DROP TABLE IF EXISTS "user_discord_connection";' : ''}
             CREATE TABLE IF NOT EXISTS "user_discord_connection" (
                 "uuid"          uuid NOT NULL UNIQUE,
-                "discord_id"    varchar(64) UNIQUE,
-                "discord_name"  varchar(32),
+                "id"            varchar(64) UNIQUE,
+                "name"          varchar(32),
                 PRIMARY KEY ("uuid")
             );
 
             ${drop === true ? 'DROP TABLE IF EXISTS "user_subscriptions";' : ''}
             CREATE TABLE IF NOT EXISTS "user_subscriptions" (
+                "id"            serial NOT NULL UNIQUE,
                 "uuid"          uuid NOT NULL,
-                "channel_id"    varchar(32) NOT NULL,
-                "info"          varchar(32) NOT NULL,
+                "sub_id"        int NOT NULL,
+                "creation"      timestamp without time zone NOT NULL DEFAULT NOW(),
+                "expiration"    timestamp without time zone NOT NULL DEFAULT NOW() + '1 month'::interval,
                 PRIMARY KEY ("uuid")
             );
 
-            ${drop === true ? 'DROP TABLE IF EXISTS "user_channels";' : ''}
-            CREATE TABLE IF NOT EXISTS "user_channels" (
+            ${drop === true ? 'DROP TABLE IF EXISTS "user_roles";' : ''}
+            CREATE TABLE IF NOT EXISTS "user_roles" (
                 "uuid"          uuid NOT NULL,
-                "channel_id"    varchar(32) NOT NULL,
-                "role"          bigint NOT NULL DEFAULT 0,
-                PRIMARY KEY ("uuid")
+                "role_id"       int NOT NULL,
+                "creation"      timestamp without time zone NOT NULL DEFAULT NOW(),
+                "enabled"       boolean NOT NULL DEFAULT TRUE,
+                PRIMARY KEY ("id")
             );
             
             ${drop === true ? 'DROP TABLE IF EXISTS "user_session_tokens";' : ''}
@@ -94,7 +97,7 @@ export class User implements Model {
                 "selector"              varchar(12) NOT NULL UNIQUE,
                 "hashed_validator"      varchar(128) NOT NULL,
                 "salt_code"             varchar(8) NOT NULL,
-                "expires"               timestamp NOT NULL,
+                "expires"               timestamp without time zone NOT NULL DEFAULT NOW() + '1 week'::interval,
                 PRIMARY KEY ("selector")
             );
 
@@ -104,7 +107,7 @@ export class User implements Model {
                 "selector"              varchar(12) NOT NULL UNIQUE,
                 "hashed_validator"      varchar(128) NOT NULL,
                 "salt_code"             varchar(8) NOT NULL,
-                "expires"               TIMESTAMP NOT NULL,
+                "expires"               timestamp without time zone NOT NULL DEFAULT NOW() + '1 year'::interval,
                 "token_level"           smallint DEFAULT 0,
                 PRIMARY KEY ("uuid")
             );
@@ -112,9 +115,10 @@ export class User implements Model {
             ${drop === true ? 'DROP TABLE IF EXISTS "user_creation_tokens";' : '' /* For Account Creation with Roles */}
             CREATE TABLE IF NOT EXISTS "user_creation_tokens" (
                 "uuid"                  uuid NOT NULL UNIQUE,
+                "selector"              varchar(12) NOT NULL UNIQUE,
                 "hashed_validator"      varchar(128) NOT NULL,
                 "salt_code"             varchar(8) NOT NULL,
-                "global_role_access"    bigint NOT NULL,
+                "role_id"               int NOT NULL,
                 PRIMARY KEY ("uuid")
             );
         `;
@@ -197,7 +201,16 @@ export class User implements Model {
 
         route.get('/connection/:platform/:platform_id', async (req, res, next) => {
             // let result = await callback('SELECT * ')
-            res.json({ okay: false, error: { message: "Not Set Up", code: 500 } } as APIResponse);
+
+            // res.json({ okay: false, error: { message: "Not Set Up", code: 500 }, data: {
+            //     platform: req.params.platform, platform_id: req.params.platform_id, origin: req.headers.origin
+            // } } as APIResponse);
+            
+            return await callback(`
+                SELECT * FROM users WHERE uuid = (
+                    SELECT uuid FROM user_${req.params.platform}_connection WHERE uuid
+                )
+            `, [req.params.platform_id])
         });
 
         return route;
