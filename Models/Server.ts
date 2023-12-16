@@ -6,8 +6,8 @@ import * as session from "express-session"
 import * as express from "express";
 import * as cors from "cors";
 
-import { ServerParams, ChatServerParams, AuthServerParams, UserData, ChatMessage } from "./Interfaces";
-import { DatabaseResponse, GenerateID, GenerateName, GenerateUUID, sleep } from "../Utils";
+import { DatabaseResponse, ServerParams, ChatServerParams, AuthServerParams, UserData, ChatMessage } from "./Interfaces";
+import { GenerateID, GenerateName, GenerateUUID, sleep } from "../Utils";
 import { APIConnection, NATSClient, RedisClient } from "../Data";
 import { PlatformManager } from "./Connection";
 import { ChatMessageType } from "./Enums";
@@ -71,7 +71,7 @@ export class GatewayServer {
             map.set(domain_relations[i][0], { domains: [...group, ...domain_relations[i][1]], index: 0 })
         }
 
-        console.log(map);
+        // console.log(map);
         return map;
     }
 

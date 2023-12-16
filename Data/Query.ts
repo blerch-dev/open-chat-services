@@ -1,6 +1,7 @@
 import { Client, QueryResult } from "pg";
 
-import { HTTPResponse, sleep } from "../Utils";
+import { HTTPResponse } from "../Models/Interfaces";
+import { sleep } from "../Utils";
 
 export async function GetDBClient() {
     // Local Dev DB Connection Prefilled for Now - Safe to Push

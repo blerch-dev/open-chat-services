@@ -2,8 +2,8 @@ import { Router } from "express";
 import { QueryResult } from "pg";
 import { WebSocket } from "ws";
 
-import { ChatMessage, Model, UserData } from "./Interfaces";
-import { DatabaseResponse, GenerateUUID, HTTPResponse, ValidUUID } from "../Utils";
+import { APIResponse, ChatMessage, Model, UserData, DatabaseResponse, HTTPResponse } from "./Interfaces";
+import { GenerateUUID,ValidUUID } from "../Utils";
 
 export class User implements Model {
     // #region User Creation
@@ -43,13 +43,13 @@ export class User implements Model {
                 "name"          varchar(32) NOT NULL UNIQUE,
                 "status"        smallint NOT NULL DEFAULT 0,
                 "hex"           varchar(6) NOT NULL DEFAULT 'ffffff',
-                "age"           timestamp NOT NULL DEFAULT NOW(),
-                "last"          timestamp NOT NULL DEFAULT NOW(),
+                "creation"      timestamp NOT NULL DEFAULT NOW(),
+                "last_active"   timestamp NOT NULL DEFAULT NOW(),
                 PRIMARY KEY ("uuid")
             );
 
             ${drop === true ? 'DROP TABLE IF EXISTS "user_twitch_connection";' : ''}
-            CREATE TABLE IF NOT EXISTS "user_twitch" (
+            CREATE TABLE IF NOT EXISTS "user_twitch_connection" (
                 "uuid"          uuid NOT NULL UNIQUE,
                 "twitch_id"     varchar(64) UNIQUE,
                 "twitch_name"   varchar(32),
@@ -57,7 +57,7 @@ export class User implements Model {
             );
 
             ${drop === true ? 'DROP TABLE IF EXISTS "user_youtube_connection";' : ''}
-            CREATE TABLE IF NOT EXISTS "user_twitch" (
+            CREATE TABLE IF NOT EXISTS "user_youtube_connection" (
                 "uuid"          uuid NOT NULL UNIQUE,
                 "youtube_id"    varchar(64) UNIQUE,
                 "youtube_name"  varchar(32),
@@ -65,7 +65,7 @@ export class User implements Model {
             );
 
             ${drop === true ? 'DROP TABLE IF EXISTS "user_discord_connection";' : ''}
-            CREATE TABLE IF NOT EXISTS "user_twitch" (
+            CREATE TABLE IF NOT EXISTS "user_discord_connection" (
                 "uuid"          uuid NOT NULL UNIQUE,
                 "discord_id"    varchar(64) UNIQUE,
                 "discord_name"  varchar(32),
@@ -98,13 +98,23 @@ export class User implements Model {
                 PRIMARY KEY ("selector")
             );
 
-            ${drop === true ? 'DROP TABLE IF EXISTS "user_access_tokens";' : ''}
+            ${drop === true ? 'DROP TABLE IF EXISTS "user_access_tokens";' : '' /* API Usage for Third Party Apps */}
             CREATE TABLE IF NOT EXISTS "user_access_tokens" (
                 "uuid"                  uuid NOT NULL UNIQUE,
-                "hashed_access_token"   varchar(128) NOT NULL,
+                "selector"              varchar(12) NOT NULL UNIQUE,
+                "hashed_validator"      varchar(128) NOT NULL,
                 "salt_code"             varchar(8) NOT NULL,
                 "expires"               TIMESTAMP NOT NULL,
                 "token_level"           smallint DEFAULT 0,
+                PRIMARY KEY ("uuid")
+            );
+
+            ${drop === true ? 'DROP TABLE IF EXISTS "user_creation_tokens";' : '' /* For Account Creation with Roles */}
+            CREATE TABLE IF NOT EXISTS "user_creation_tokens" (
+                "uuid"                  uuid NOT NULL UNIQUE,
+                "hashed_validator"      varchar(128) NOT NULL,
+                "salt_code"             varchar(8) NOT NULL,
+                "global_role_access"    bigint NOT NULL,
                 PRIMARY KEY ("uuid")
             );
         `;
@@ -187,7 +197,7 @@ export class User implements Model {
 
         route.get('/connection/:platform/:platform_id', async (req, res, next) => {
             // let result = await callback('SELECT * ')
-            res.json({ self: true, platform: req.params.platform, platform_id: req.params.platform_id });
+            res.json({ okay: false, error: { message: "Not Set Up", code: 500 } } as APIResponse);
         });
 
         return route;

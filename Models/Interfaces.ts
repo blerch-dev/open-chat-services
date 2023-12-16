@@ -1,4 +1,3 @@
-import { DatabaseResponse } from '../Utils'
 export interface Model { // public fields/methods only
     toJSON(): any,
     DBInsertSafe(callback: (str: string, val: any[]) => Promise<DatabaseResponse>): Promise<any>
@@ -63,8 +62,8 @@ import { SubscriptionType } from './Enums';
 export interface Subscription {
     id: string, // id for db storage
     type: SubscriptionType,
-    date: number, // epoch ts from sub start
-    length: number // add to date to find expire
+    creation: number, // epoch ts from sub start
+    expiration: number // epoch ts for sub expiration date
 }
 
 export interface Badge {
@@ -119,4 +118,31 @@ export interface ChatMessage {
     event?: any,
     state?: any,
     admin?: any
+}
+
+export type HTTPResponse = {
+    okay: boolean,
+    code: number,
+    message?: string,
+    data?: unknown
+}
+
+export type DatabaseResponse = {
+    results?: any[],
+    meta?: any,
+    error?: {
+        code: number, // Matches HTTP Response Code
+        message?: string
+    }
+}
+
+export interface APIResponse {
+    okay: boolean,
+    error?: APIError,
+    data?: { [key: string]: unknown }
+}
+
+export interface APIError {
+    message: string,
+    code?: number
 }

@@ -2,6 +2,9 @@ import { Router } from "express";
 
 import { Channel } from "./Channel";
 import { User } from "./User";
+import { APIError, APIResponse,  } from "./Interfaces";
+import { GenerateUUID } from "../Utils";
+import { Platforms } from "./Enums";
 
 export class PlatformManager {
     private twitch: TwitchOAuth;
@@ -37,6 +40,9 @@ abstract class OAuth {
     abstract Authenticate(data: any): any;
     abstract Verify(data: any): any;
     abstract Handler(): Router;
+
+    abstract UserSubbedToChannel(user: User, Channel: Channel): void;
+    abstract CreateUserFromPlatformData(data: any): User | Error;
 }
 
 export class TwitchOAuth extends OAuth {
@@ -60,7 +66,7 @@ export class TwitchOAuth extends OAuth {
     }
 
     // Break Into Functions
-    public async Verify(data: { code: string, origin: string }): Promise<{ user: User, fresh: boolean} | Error> {
+    public async Verify(data: { code: string, origin: string }): Promise<APIResponse | APIError> {
         let validate_url = `https://id.twitch.tv/oauth2/token?client_id=${this.client.id}
             &client_secret=${this.client.secret}
             &code=${data.code}
@@ -81,17 +87,17 @@ export class TwitchOAuth extends OAuth {
             }
         });
 
-        return await this.GetUserFromData(await result.json());
+        let user = await this.GetUserFromData(await result.json());
+        console.log("User Result:", user);
+        return { message: 'testing...' }
     }
 
-    private async GetUserFromData(json: any): Promise<{ user: User, fresh: boolean} | Error> {
+    private async GetUserFromData(json: any): Promise<APIResponse | APIError> {
         const twitch_data = Array.isArray(json?.data) && json?.data[0]?.id !== undefined ? json.data[0] : null;
+        console.log("Twitch Data:", twitch_data);
 
-        let result = await (await fetch('http://localhost:8000/user/connection/twitch/test')).json();
-        console.log("Self Search:", result);
-
-        return new Error();
-        // check db for user related
+        // Needs better url set up
+        return await (await fetch('http://localhost:8000/user/connection/twitch/test')).json();
     }
 
     public Handler() {
@@ -113,8 +119,20 @@ export class TwitchOAuth extends OAuth {
         return route;
     }
 
-    public UserSubbedToChannel(user: User, Channel: Channel) {
+    public async UserSubbedToChannel(user: User, Channel: Channel) {
 
+    }
+
+    public CreateUserFromPlatformData(data: { twitch: any, input: any }) {
+        if(data?.twitch?.id == undefined || data?.twitch?.login == undefined) { 
+            return new Error("Invalid Twitch Data"); 
+        }
+
+        return User.CreateFromData({
+            uuid: GenerateUUID(),
+            name: data.input?.name ?? data.twitch?.display_name ?? data.twitch.login,
+            auth: [{ platform: Platforms.Twitch, id: data.twitch.id, name: data.twitch.login }]
+        });
     }
 }
 
@@ -137,5 +155,22 @@ export class YoutubeOAuth extends OAuth {
         let route = Router();
 
         return route;
+    }
+
+    public async UserSubbedToChannel(user: User, Channel: Channel) {
+
+    }
+
+    // Copied from twitch, change to match youtube data format
+    public CreateUserFromPlatformData(data: { youtube: any, input: any }) {
+        if(data?.youtube?.id == undefined || data?.youtube?.login == undefined) { 
+            return new Error("Invalid Twitch Data"); 
+        }
+        
+        return User.CreateFromData({
+            uuid: GenerateUUID(),
+            name: data.input?.name ?? data.youtube?.display_name ?? data.youtube.login,
+            auth: [{ platform: Platforms.Youtube, id: data.youtube.id, name: data.youtube.login }]
+        });
     }
 }

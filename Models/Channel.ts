@@ -1,8 +1,8 @@
 import { QueryResult } from "pg";
 import { Router } from "express";
 
-import { DatabaseResponse, GenerateID, HTTPResponse, ValidUUID } from "../Utils";
-import { ChannelData, Model } from "./Interfaces";
+import { GenerateID, ValidUUID } from "../Utils";
+import { DatabaseResponse, HTTPResponse, ChannelData, Model } from "./Interfaces";
 import { Room } from "./Room";
 
 export class Channel implements Model {
@@ -53,7 +53,9 @@ export class Channel implements Model {
                 "twitch_id"     varchar(64),
                 "youtube_id"    varchar(64),
                 "kick_id"       varchar(64),
-                "rumble_id"     varchar(64),
+                "rumble_id"     varchar(64), ${ /* Should move ids to own column type */ ''}
+                "creation"      timestamp NOT NULL DEFAULT NOW(),
+                "last_active"   timestamp NOT NULL DEFAULT NOW(),
                 PRIMARY KEY ("id")
             );
 
@@ -73,6 +75,17 @@ export class Channel implements Model {
                 "id"            serial NOT NULL UNIQUE,
                 "name"          varchar(32) NOT NULL,
                 "icon"          varchar(256) NOT NULL,
+                "channel_id"    varchar(32),
+                PRIMARY KEY ("id")
+            );
+
+            ${drop === true ? 'DROP TABLE IF EXISTS "subscriptions";' : ''}
+            CREATE TABLE IF NOT EXISTS "subscriptions" (
+                "id"            serial NOT NULL UNIQUE,
+                "ower_uuid"     uuid NOT NULL,
+                "level"         smallint NOT NULL DEFAULT 100,
+                "creation"           timestamp NOT NULL DEFAULT NOW(),
+                "expiration"          timestamp NOT NULL DEFAULT NOW(),
                 "channel_id"    varchar(32),
                 PRIMARY KEY ("id")
             );
