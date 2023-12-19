@@ -136,13 +136,13 @@ export type DatabaseResponse = {
     }
 }
 
-export interface APIResponse {
-    okay: boolean,
-    error?: APIError,
-    data?: { [key: string]: unknown }
-}
+// export interface APIResponse {
+//     okay: boolean,
+//     error?: APIError,
+//     data?: { [key: string]: unknown }
+// }
 
-export interface APIError {
-    message: string,
-    code?: number
-}
+// export interface APIError {
+//     message: string,
+//     code?: number
+// }

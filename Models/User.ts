@@ -2,7 +2,7 @@ import { Router } from "express";
 import { QueryResult } from "pg";
 import { WebSocket } from "ws";
 
-import { APIResponse, ChatMessage, Model, UserData, DatabaseResponse, HTTPResponse } from "./Interfaces";
+import { ChatMessage, Model, UserData, DatabaseResponse, HTTPResponse } from "./Interfaces";
 import { GenerateUUID,ValidUUID } from "../Utils";
 
 export class User implements Model {
@@ -79,7 +79,7 @@ export class User implements Model {
                 "sub_id"        int NOT NULL,
                 "creation"      timestamp without time zone NOT NULL DEFAULT NOW(),
                 "expiration"    timestamp without time zone NOT NULL DEFAULT NOW() + '1 month'::interval,
-                PRIMARY KEY ("uuid")
+                PRIMARY KEY ("id")
             );
 
             ${drop === true ? 'DROP TABLE IF EXISTS "user_roles";' : ''}
@@ -88,7 +88,7 @@ export class User implements Model {
                 "role_id"       int NOT NULL,
                 "creation"      timestamp without time zone NOT NULL DEFAULT NOW(),
                 "enabled"       boolean NOT NULL DEFAULT TRUE,
-                PRIMARY KEY ("id")
+                PRIMARY KEY ("uuid")
             );
             
             ${drop === true ? 'DROP TABLE IF EXISTS "user_session_tokens";' : ''}
@@ -208,7 +208,7 @@ export class User implements Model {
             
             return await callback(`
                 SELECT * FROM users WHERE uuid = (
-                    SELECT uuid FROM user_${req.params.platform}_connection WHERE uuid
+                    SELECT uuid FROM user_${req.params.platform}_connection WHERE uuid = $1
                 )
             `, [req.params.platform_id])
         });

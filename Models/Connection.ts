@@ -1,8 +1,11 @@
+import { readFile } from 'fs/promises';
+import { resolve } from 'path';
+
 import { Router } from "express";
 
 import { Channel } from "./Channel";
 import { User } from "./User";
-import { APIError, APIResponse,  } from "./Interfaces";
+import { UserData,  } from "./Interfaces";
 import { GenerateUUID } from "../Utils";
 import { Platforms } from "./Enums";
 
@@ -32,6 +35,7 @@ export class PlatformManager {
 }
 
 abstract class OAuth {
+    protected platform: string;
     protected client: { id: string, secret: string };
     protected dev: boolean;
 
@@ -43,12 +47,18 @@ abstract class OAuth {
 
     abstract UserSubbedToChannel(user: User, Channel: Channel): void;
     abstract CreateUserFromPlatformData(data: any): User | Error;
+
+    public async UserCreationForm(user: User | UserData) {
+        if(user instanceof User) { return await readFile(resolve(__dirname, './Assets/HTML/ValidUser.html'), 'utf8'); }
+        return await readFile(resolve(__dirname, './Assets/HTML/UserForm.html'), 'utf8');
+    }
 }
 
 export class TwitchOAuth extends OAuth {
     constructor(params: { client: { id: string, secret: string }, dev?: boolean }) {
         super();
 
+        this.platform = 'Twitch';
         this.client = params.client;
         this.dev = params?.dev ?? false;
     }
@@ -66,7 +76,7 @@ export class TwitchOAuth extends OAuth {
     }
 
     // Break Into Functions
-    public async Verify(data: { code: string, origin: string }): Promise<APIResponse | APIError> {
+    public async Verify(data: { code: string, origin: string }): Promise<any> {
         let validate_url = `https://id.twitch.tv/oauth2/token?client_id=${this.client.id}
             &client_secret=${this.client.secret}
             &code=${data.code}
@@ -88,16 +98,16 @@ export class TwitchOAuth extends OAuth {
         });
 
         let user = await this.GetUserFromData(await result.json());
-        console.log("User Result:", user);
-        return { message: 'testing...' }
+        return user;
     }
 
-    private async GetUserFromData(json: any): Promise<APIResponse | APIError> {
+    private async GetUserFromData(json: any): Promise<any> {
         const twitch_data = Array.isArray(json?.data) && json?.data[0]?.id !== undefined ? json.data[0] : null;
-        console.log("Twitch Data:", twitch_data);
+        // console.log("Twitch Data:", twitch_data);
 
         // Needs better url set up
         return await (await fetch(`http://auth.app.tv/user/connection/twitch/${twitch_data.id}`)).json();
+        // might combine stuff here
     }
 
     public Handler() {
@@ -111,9 +121,16 @@ export class TwitchOAuth extends OAuth {
         route.get('/auth', async (req, res, next) => {
             // should be user or error
             let user = await this.Verify({ code: req.query.code as string, origin: req.session?.state?.origin ?? req.headers.origin });
-            res.end();
-
+            console.log("User Result:", user);
+            
+            
             // apply session to request, return everything
+        });
+
+        route.get('/sign-up', async (req, res, next) => {
+            let user = req.session?.session_user_data ?? User.CreateFromData(req.session?.user);
+            if(user instanceof Error) { return res.status(500).json({ Error: { name: user.name, message: user.message } }); }
+            return res.status(200).send(this.UserCreationForm(user as User | UserData));
         });
 
         return route;
@@ -137,10 +154,12 @@ export class TwitchOAuth extends OAuth {
 }
 
 export class YoutubeOAuth extends OAuth {
-    constructor(params: { client: { id: string, secret: string } }) {
+    constructor(params: { client: { id: string, secret: string }, dev?: boolean }) {
         super();
 
+        this.platform = 'Youtube';
         this.client = params.client;
+        this.dev = params?.dev ?? false;
     }
 
     public Authenticate(data: any) {

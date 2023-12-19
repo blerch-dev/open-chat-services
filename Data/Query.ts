@@ -6,9 +6,10 @@ import { sleep } from "../Utils";
 export async function GetDBClient() {
     // Local Dev DB Connection Prefilled for Now - Safe to Push
     const DB = new Client({
-        user: 'app',
-        password: 'app',
-        database: 'open-chat-local-dev'
+        user: process.env.POSTGRES_USERNAME ?? 'app',
+        password: process.env.POSTGRES_PASSWORD ?? 'app',
+        database: process.env.POSTGRES_DATABASE ?? 'open-chat-local-dev',
+        host: process.env.POSTGRES_HOSTNAME ?? '127.0.0.1'
     });
     await DB.connect();
     return DB;

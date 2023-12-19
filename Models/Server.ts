@@ -19,6 +19,7 @@ import { Room } from "./Room";
 declare module "express-session" {
     interface SessionData {
         user: UserData,
+        session_user_data?: UserData, // for non-db user information (sign up)
         state: any
     }
 }
