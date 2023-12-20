@@ -1,5 +1,6 @@
 import { Server as HTTPServer, IncomingMessage, ServerResponse, createServer } from "http";
 import { Server as HTTPSServer, createServer as createSecureServer } from 'https';
+import { join } from 'path';
 
 import { WebSocketServer, WebSocket } from "ws";
 import { createProxyServer } from "http-proxy";
@@ -58,7 +59,7 @@ export class GatewayServer {
         // Works - Domains Above for CORS on Gateway - Open to all currently
             // Requires Exact String, Will Add Regex Support Later
         this.server = createServer(handle_proxy).listen(data.port ?? 80);
-        this.sercure_server = createSecureServer(handle_proxy).listen(443);
+        if(!data.dev) { this.sercure_server = createSecureServer(handle_proxy).listen(443); }
     }
 
     getDomainMap() { return this.map; }
@@ -180,8 +181,7 @@ export class Server {
         // Auth Server
         if(params?.auth === true) { 
             this.auth = new AuthServer({ server: this });
-            const api = await this.auth.getAPI();
-            this.app.use(api);
+            this.app.use(await this.auth.getAPIRouter());
         }
 
         this.listener = this.app.listen(params.port ?? 8000);
@@ -246,7 +246,7 @@ export class AuthServer {
         return this.DB.connected;
     }
 
-    async getAPI() {
+    async getAPIRouter() {
         const API = express.Router();
 
         // User Model - Requires Lambda to Keep Context
@@ -258,7 +258,32 @@ export class AuthServer {
         // OAuth
         API.use('/oauth', this.oauth.GetRouter());
 
+        // Auth Input/Results for Render
+        API.use('/auth', this.getUserAuthPage());
+
         return API;
+    }
+
+    getUserAuthPage() {
+        const AuthFlow = express.Router();
+
+        AuthFlow.get('/auth', (req, res, next) => {
+            // if user, return valid user page
+            // if session_user_data, return user form page
+                // post to auth
+
+            if(req.session.user) { return res.sendFile(join(__dirname, './Assets/HTML/ValidUser.html')); }
+            else if(req.session.session_user_data) { return res.sendFile(join(__dirname, './Assets/HTML/UserForm.html')); }
+            return res.status(401).send("Invalid User Session");
+        });
+
+        AuthFlow.post('/auth', (req, res, next) => {
+            // add to session_user_data and then add to db
+            
+            res.end();
+        })
+
+        return AuthFlow;
     }
 
     async QueryData(str: string, values: any[] = []) {
@@ -313,13 +338,9 @@ export class ChatServer {
 
         // Creating Room if it doesn't Exist - Dev (Should Load from DB or MessageQueue Events)
         if(this.rooms.has(url.substring(1))) { return this.rooms.get(url.substring(1)); }
-        else {
-            let room = new Room({ id: GenerateID(), name: url.substring(1) });
-            this.rooms.set(url.substring(1), room);
-            return room; 
-        }
-
-        return null;
+        let room = new Room({ id: GenerateID(), name: url.substring(1) });
+        this.rooms.set(url.substring(1), room);
+        return room; 
     }
 
     GetUserFromRequest(request: IncomingMessage): User | null {
