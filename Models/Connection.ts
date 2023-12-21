@@ -90,15 +90,14 @@ export class TwitchOAuth extends OAuth {
 
         let json = await validation.json();
 
-        let result = await fetch('https://api.twitch.tv/helix/users', {
+        let result = await (await fetch('https://api.twitch.tv/helix/users', {
             headers: {
                 'Authorization': `Bearer ${json.access_token}`,
                 'Client-Id': `${this.client.id}`
             }
-        });
+        })).json();
 
-        let user = await this.GetUserFromData(await result.json());
-        return user;
+        return { ...await this.GetUserFromData(await result), connection: { twitch: result } };
     }
 
     private async GetUserFromData(json: any): Promise<any> {
@@ -121,6 +120,10 @@ export class TwitchOAuth extends OAuth {
         route.get('/auth', async (req, res, next) => {
             // should be user or error
             let user = await this.Verify({ code: req.query.code as string, origin: req.session?.state?.origin ?? req.headers.origin });
+            if(user.results.length == 0) {
+                // req.session.session_user_data = User.CreateFromOAuth()
+            }
+
             console.log("User Result:", user);
             
             

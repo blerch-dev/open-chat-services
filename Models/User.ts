@@ -2,7 +2,7 @@ import { Router } from "express";
 import { QueryResult } from "pg";
 import { WebSocket } from "ws";
 
-import { ChatMessage, Model, UserData, DatabaseResponse, HTTPResponse } from "./Interfaces";
+import { ChatMessage, Model, UserData, DatabaseResponse, HTTPResponse, PlatformConnection } from "./Interfaces";
 import { GenerateUUID,ValidUUID } from "../Utils";
 
 export class User implements Model {
@@ -30,6 +30,10 @@ export class User implements Model {
         } else {
             return { okay: false, code: 422, message: user.message }
         }
+    }
+
+    static async CreateFromOAuth(connection: PlatformConnection) {
+        
     }
     // #endregion
     
@@ -200,17 +204,13 @@ export class User implements Model {
         });
 
         route.get('/connection/:platform/:platform_id', async (req, res, next) => {
-            // let result = await callback('SELECT * ')
-
-            // res.json({ okay: false, error: { message: "Not Set Up", code: 500 }, data: {
-            //     platform: req.params.platform, platform_id: req.params.platform_id, origin: req.headers.origin
-            // } } as APIResponse);
-            
-            return await callback(`
+            let result =  await callback(`
                 SELECT * FROM users WHERE uuid = (
-                    SELECT uuid FROM user_${req.params.platform}_connection WHERE uuid = $1
+                    SELECT uuid FROM user_${req.params.platform}_connection WHERE id = $1
                 )
-            `, [req.params.platform_id])
+            `, [req.params.platform_id]);
+
+            return res.json({ results: result.rows, meta: {} } as DatabaseResponse);
         });
 
         return route;
