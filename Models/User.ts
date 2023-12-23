@@ -32,8 +32,8 @@ export class User implements Model {
         }
     }
 
-    static async CreateFromOAuth(connection: PlatformConnection) {
-        
+    static CreateFromOAuth(connection: PlatformConnection): User {
+        return new User({ uuid: GenerateUUID(), name: connection.name, auth: [connection] });
     }
     // #endregion
     
@@ -126,6 +126,8 @@ export class User implements Model {
                 PRIMARY KEY ("uuid")
             );
         `;
+
+        // CREATE A VIEW FOR AUTO USER OBJECT FETCHING STUFF, will simplify api
     }    
 
     static getAPIRouter(callback: (str: string, val: any[]) => Promise<QueryResult>, dev: boolean = false) {

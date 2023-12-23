@@ -122,6 +122,7 @@ export class TwitchOAuth extends OAuth {
             let user = await this.Verify({ code: req.query.code as string, origin: req.session?.state?.origin ?? req.headers.origin });
             if(user.results.length == 0) {
                 // req.session.session_user_data = User.CreateFromOAuth()
+                req.session.session_user_data = User.CreateFromOAuth(user.connection).toJSON();
             }
 
             console.log("User Result:", user);
