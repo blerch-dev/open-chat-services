@@ -49,3 +49,14 @@ export enum Platforms {
 }
 
 // Subscription Level will be a number (100, 200, 300) up to level's allowed per channel
+
+export enum ServerErrorType {
+    UndefinedError = 0,
+    GenericError = 1,
+    BadRequest = 400,
+    AuthenticationError = 401,
+    MissingResource = 404,
+    UnprocessableContent = 422,
+    ServerError = 500,
+    NotImplemented = 501
+}

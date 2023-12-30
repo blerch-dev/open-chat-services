@@ -2,18 +2,21 @@ import { readFile } from 'fs/promises';
 import { resolve } from 'path';
 
 import { Router } from "express";
+import { QueryResult } from 'pg';
 
 import { Channel } from "./Channel";
 import { User } from "./User";
-import { UserData,  } from "./Interfaces";
-import { GenerateUUID } from "../Utils";
-import { Platforms } from "./Enums";
+import { UserData } from "./Interfaces";
+import { GenerateUUID, ServerError } from "../Utils";
+import { Platforms, ServerErrorType } from "./Enums";
 
 export class PlatformManager {
     private twitch: TwitchOAuth;
     private youtube: YoutubeOAuth;
 
-    constructor(params?: { twitch: any, youtube: any }) {
+    private query_callback: (str: string, val: any[]) => Promise<QueryResult>
+
+    constructor(params?: { twitch: any, youtube: any, query_callback: any }) {
         this.twitch = new TwitchOAuth(params?.twitch ?? { 
             client: { id: process.env.TWITCH_CLIENT_ID, secret: process.env.TWITCH_CLIENT_SECRET },
             dev: true
@@ -22,13 +25,15 @@ export class PlatformManager {
         this.youtube = new YoutubeOAuth(params?.youtube ?? { 
             client: { id: process.env.YOUTUBE_CLIENT_ID, secret: process.env.YOUTUBE_CLIENT_SECRET }
         });
+
+        this.query_callback = params.query_callback ? params.query_callback : () => { return null; };
     }
 
     GetRouter() {
         const route = Router();
 
-        route.use('/twitch', this.twitch.Handler());
-        route.use('/youtube', this.youtube.Handler());
+        route.use('/twitch', this.twitch.Handler(this.query_callback));
+        route.use('/youtube', this.youtube.Handler(this.query_callback));
 
         return route;
     }
@@ -43,7 +48,7 @@ abstract class OAuth {
 
     abstract Authenticate(data: any): any;
     abstract Verify(data: any): any;
-    abstract Handler(): Router;
+    abstract Handler(query: (str: string, val: any[]) => Promise<QueryResult>): Router;
 
     abstract UserSubbedToChannel(user: User, Channel: Channel): void;
     abstract CreateUserFromPlatformData(data: any): User | Error;
@@ -76,7 +81,7 @@ export class TwitchOAuth extends OAuth {
     }
 
     // Break Into Functions
-    public async Verify(data: { code: string, origin: string }): Promise<any> {
+    public async Verify(data: { code: string, origin: string }): Promise<{ user: User | ServerError, connection: any }> {
         let validate_url = `https://id.twitch.tv/oauth2/token?client_id=${this.client.id}
             &client_secret=${this.client.secret}
             &code=${data.code}
@@ -89,7 +94,6 @@ export class TwitchOAuth extends OAuth {
         } });
 
         let json = await validation.json();
-
         let result = await (await fetch('https://api.twitch.tv/helix/users', {
             headers: {
                 'Authorization': `Bearer ${json.access_token}`,
@@ -97,19 +101,18 @@ export class TwitchOAuth extends OAuth {
             }
         })).json();
 
-        return { ...await this.GetUserFromData(await result), connection: { twitch: result } };
+        return { user: await this.GetUserFromData(result), connection: { twitch: result } };
     }
 
-    private async GetUserFromData(json: any): Promise<any> {
+    private async GetUserFromData(json: any): Promise<User | ServerError> {
         const twitch_data = Array.isArray(json?.data) && json?.data[0]?.id !== undefined ? json.data[0] : null;
-        // console.log("Twitch Data:", twitch_data);
 
         // Needs better url set up
-        return await (await fetch(`http://auth.app.tv/user/connection/twitch/${twitch_data.id}`)).json();
-        // might combine stuff here
+        let { results } = await (await fetch(`http://auth.app.tv/user/connection/twitch/${twitch_data.id}`)).json();
+        return User.CreateFromData(results[0]);
     }
 
-    public Handler() {
+    public Handler(query: (str: string, val: any[]) => Promise<QueryResult>) {
         let route = Router();
 
         route.get('/', (req, res, next) => { 
@@ -119,22 +122,19 @@ export class TwitchOAuth extends OAuth {
 
         route.get('/auth', async (req, res, next) => {
             // should be user or error
-            let user = await this.Verify({ code: req.query.code as string, origin: req.session?.state?.origin ?? req.headers.origin });
-            if(user.results.length == 0) {
-                // req.session.session_user_data = User.CreateFromOAuth()
-                req.session.session_user_data = User.CreateFromOAuth(user.connection).toJSON();
+            let { user, connection } = await this.Verify({ code: req.query.code as string, origin: req.session?.state?.origin ?? req.headers.origin });
+            if(user instanceof ServerError) {
+                user = await User.CreateFromOAuth(connection);
+                let insert = await User.APIFunctions.SafeInsert(user.toJSON(), query);
+                if(insert instanceof ServerError) { return res.redirect(req.session.state.origin + `/api/error?${insert.toJSON()}`); }
+                if(insert === false) { 
+                    let error = new ServerError(ServerErrorType.ServerError, "Issue Adding User to Database. Try Again Later.");
+                    return res.redirect(req.session.state.origin + `/api/error?${error.toJSON()}`);
+                }
             }
 
-            console.log("User Result:", user);
-            
-            
-            // apply session to request, return everything
-        });
-
-        route.get('/sign-up', async (req, res, next) => {
-            let user = req.session?.session_user_data ?? User.CreateFromData(req.session?.user);
-            if(user instanceof Error) { return res.status(500).json({ Error: { name: user.name, message: user.message } }); }
-            return res.status(200).send(this.UserCreationForm(user as User | UserData));
+            req.session.user = user.toJSON(); 
+            return res.redirect(req.session.state?.origin);
         });
 
         return route;
@@ -174,7 +174,7 @@ export class YoutubeOAuth extends OAuth {
         
     }
 
-    public Handler() {
+    public Handler(query: any) {
         let route = Router();
 
         return route;

@@ -15,6 +15,10 @@ export async function GetDBClient() {
     return DB;
 }
 
+export function AffectedRowCount(query: QueryResult) {
+    return query?.rowCount ?? 0;
+}
+
 export class APIConnection {
     private DBConnection: Client;
 

@@ -1,19 +1,21 @@
 import { QueryResult } from "pg";
 import { Router } from "express";
 
-import { GenerateID, ValidUUID } from "../Utils";
-import { DatabaseResponse, HTTPResponse, ChannelData, Model } from "./Interfaces";
+import { GenerateID, ServerError, ValidUUID } from "../Utils";
+import { HTTPResponse, ChannelData, Model } from "./Interfaces";
 import { Room } from "./Room";
+import { ServerErrorType } from "./Enums";
+import { AffectedRowCount } from "../Data/Query";
 
 export class Channel implements Model {
 
     // #region Channel Creation
-    static CreateFromData(data: ChannelData): Channel | Error {
+    static CreateFromData(data: ChannelData): Channel | ServerError {
         if(data.slug.length < 3 || data.name.length > 32) {
-            return Error("Name is an invalid length. Must be between 3 and 32 characters.");
+            return new ServerError(ServerErrorType.BadRequest, "Name is an invalid length. Must be between 3 and 32 characters.");
         }
 
-        if(!ValidUUID(data?.owner_uuid)) { return Error("Invalid Owner UUID given."); }
+        if(!ValidUUID(data?.owner_uuid)) { return new ServerError(ServerErrorType.BadRequest, "Invalid Owner UUID given."); }
 
         data.id = Channel.GenerateID();
         data.slug = data?.slug?.toLowerCase() ?? data?.id?.toLowerCase();
@@ -97,34 +99,69 @@ export class Channel implements Model {
         `;
     }
 
-    static getAPIRouter(callback: (str: string, val: any[]) => Promise<QueryResult>, dev: boolean = false) {
+    static APIFunctions = {
+        GetOwnedChannels: 
+        async (uuid: any, callback: (str: string, val: any[]) => Promise<QueryResult>): Promise<Channel[] | ServerError> => {
+            let result = await callback('SELECT * FROM channels WHERE owner_uuid = $1', [uuid]);
+            if(result.rowCount === 0) { return new ServerError(ServerErrorType.MissingResource, "No Channel Found for Given Owner UUID."); }
+            let channels = [];
+            for(let i = 0; i < result.rowCount; i++) {
+                let channel = Channel.CreateFromData(result.rows[i]);
+                if(channel instanceof Channel) { channels.push(channel); }
+            }
+            return channels;
+        },
+
+        GetRelatedChannels: 
+        async (uuid: any, callback: (str: string, val: any[]) => Promise<QueryResult>): Promise<Channel[] | ServerError> => {
+            return new ServerError();
+        },
+
+        SafeInsert:
+        async (channel: ChannelData, callback: (str: string, val: any[]) => Promise<QueryResult>): Promise<boolean | ServerError> => {
+            // Check if Id/Slug is Unique
+            let result = await callback(`SELECT 1 FROM channels WHERE id = $1 OR LOWER(slug) = $2`, [channel.id, channel.slug.toLowerCase()]);
+
+            // Handle Error for Uniques
+            if(result.rows.length > 0) { 
+                return new ServerError(ServerErrorType.UnprocessableContent, "Invalid ID or Slug.")
+            }
+
+            // Insert Channel
+            result = await callback(
+                `INSERT INTO channels (id, slug, owner_uuid, name, domain, icon, twitch_id, youtube_id, kick_id, rumble_id) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+                [
+                    channel.id, channel.slug, channel.owner_uuid, channel.domain, channel.icon, 
+                    channel.embeds?.twitch, channel.embeds?.youtube, channel.embeds?.kick, channel.embeds?.rumble
+                ]
+            );
+            
+            // Insert to Associated Tables - TODO
+
+            return AffectedRowCount(result) > 0; // Returns 
+        }
+    }
+
+    static getAPIRouter(callback: (str: string, val: any[]) => Promise<QueryResult>) {
         const route = Router();
 
         route.get('/', async (req, res, next) => {
-            // If Session, Get Channels with Owner UUID that matches Current User
+            // If Session, Get Channels with Owner UUID that matches Current User or All Related Channels
             if(req.session.user) {
-                // Refresh from DB
-                let result = await callback('SELECT * FROM channels WHERE owner_uuid = $1', [req.session.user.uuid]);
-                if(result.rowCount === 0) { 
-                    return res.json({ error: { code: 500, message: "Invalid channel database results." } } as DatabaseResponse); 
-                }
-
-                // Create User from DB Read
-                let channel = Channel.CreateFromData(result.rows[0]);
-                if(channel instanceof Error) { 
-                    return res.json({ error: { code: 500, message: "Issue creating channel from stored data." } } as DatabaseResponse); 
-                }
-
-                // Return Channel Data
-                return res.json({ results: [(channel as Channel).toJSON()] } as DatabaseResponse);
+                let result = await Channel.APIFunctions.GetOwnedChannels(req.session.user.uuid, callback);
+                if(result instanceof ServerError) { return res.json(result.toJSON()); }
+                return res.json(JSON.stringify({ channels: result.map((ch) => ch.toJSON()) }));
             }
 
-            return res.json({ error: { code: 401, message: "No User to find Channel's owned." } } as DatabaseResponse);
+            // Response for No User Index Search, Might Add Something Else Here Later
+            let error = new ServerError(ServerErrorType.AuthenticationError, "No User to find Channel's owned.");
+            return res.status(error.getStatus()).json(error.toJSON());
         });
 
         route.get('/id/:id', async (req, res, next) => {
             let result = await callback('SELECT * FROM channels WHERE id = $1', [req.params.id]);
-            return res.json({ results: result.rows, meta: {} } as DatabaseResponse);
+            return res.json({ results: result.rows, meta: {} });
         });
 
         route.get('/search/:search', async (req, res, next) => {
@@ -132,29 +169,16 @@ export class Channel implements Model {
                 'SELECT * FROM channels WHERE id ILIKE $1 OR slug ILIKE $1 OR name ILIKE $1 OR domain ILIKE $1', 
                 [req.params.search]
             );
-            return res.json({ results: result.rows, meta: {} } as DatabaseResponse);
+            return res.json({ results: result.rows, meta: {} });
         });
         
         route.post('/create', async (req, res, next) => {
             // Parses Form Body
             let result = await Channel.FormValidation(req.body);
             if(result instanceof Channel) {
-                // Insert User into DB
-                let channelCreation = await result.DBInsertSafe(async (str: string, val: any[]) => {
-                    let result = await callback(str, val);
-                    return { results: result.rows, meta: {} } as DatabaseResponse
-                });
-                
-                // Dev Logging for Bug Fixing
-                if(result === channelCreation && dev === true) { console.log("Channel Created and Inserted:", channelCreation); }
-                else if(dev === true) { console.log("Issue Inserting Channel:", channelCreation); }
-
-                // Handle Insert Results
-                if(channelCreation instanceof Channel) {
-                    return res.json({ results: [channelCreation.toJSON()] } as DatabaseResponse);
-                } else {
-                    return res.status(channelCreation.error?.code).json(channelCreation);
-                }
+                let insert = await Channel.APIFunctions.SafeInsert(result.toJSON(), callback);
+                if(insert instanceof ServerError) { return res.status(insert.getStatus()).json(insert.toJSON()); }
+                return res.json({ channel: result.toJSON(), added: insert as boolean });
             } else {
                 // Handle Error
                 return res.status(result.code).json(result);
@@ -162,36 +186,6 @@ export class Channel implements Model {
         });
 
         return route;
-    }
-
-    async DBInsertSafe(callback: (str: string, val: any[]) => Promise<DatabaseResponse>, dev: boolean = false) {
-        // Check if Id/Slug is Unique
-        let result = await callback(`SELECT 1 FROM channels WHERE id = $1 OR LOWER(slug) = $2`, [this.data.id, this.data.slug.toLowerCase()]);
-        if(dev === true) { console.log("Check for Uniques:", result); }
-
-        // Handle Error for Uniques
-        if(result.error) { if(dev === true) { console.log("Error::", result.error); } return result; }
-        else if(result.results.length > 0) { 
-            if(dev === true) { console.log("Not Unique"); } 
-            return { error: { code: 422, message: "Invalid ID or Slug." } } as DatabaseResponse; 
-        }
-
-        // Insert Channel
-        result = await callback(
-            `INSERT INTO users (id, slug, owner_uuid, name, domain, icon, twitch_id, youtube_id, kick_id, rumble_id) 
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-            [
-                this.data.id, this.data.slug, this.data.owner_uuid, this.data.domain, this.data.icon, 
-                this.data.embeds?.twitch, this.data.embeds?.youtube, this.data.embeds?.kick, this.data.embeds?.rumble
-            ]
-        );
-        
-        // Insert to Associated Tables - TODO
-
-        // Handle Errors
-        if(dev === true) { console.log("Output for User Insert:", result); }
-        if(result.error) { console.log("Error::", result.error); return result; }
-        return this; // Returns Channel Object
     }
     // #endregion
 

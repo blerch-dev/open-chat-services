@@ -8,7 +8,7 @@ import * as session from "express-session"
 import * as express from "express";
 import * as cors from "cors";
 
-import { DatabaseResponse, ServerParams, ChatServerParams, AuthServerParams, UserData, ChatMessage } from "./Interfaces";
+import { ServerParams, ChatServerParams, AuthServerParams, UserData, ChatMessage } from "./Interfaces";
 import { GenerateID, GenerateName, GenerateUUID, sleep } from "../Utils";
 import { APIConnection, NATSClient, RedisClient } from "../Data";
 import { PlatformManager } from "./Connection";
@@ -20,7 +20,6 @@ import { Room } from "./Room";
 declare module "express-session" {
     interface SessionData {
         user: UserData,
-        session_user_data?: UserData, // for non-db user information (sign up)
         state: any
     }
 }
@@ -258,32 +257,7 @@ export class AuthServer {
         // OAuth
         API.use('/oauth', this.oauth.GetRouter());
 
-        // Auth Input/Results for Render
-        API.use('/auth', this.getUserAuthPage());
-
         return API;
-    }
-
-    getUserAuthPage() {
-        const AuthFlow = express.Router();
-
-        AuthFlow.get('/auth', (req, res, next) => {
-            // if user, return valid user page
-            // if session_user_data, return user form page
-                // post to auth
-
-            if(req.session.user) { return res.sendFile(join(__dirname, './Assets/HTML/ValidUser.html')); }
-            else if(req.session.session_user_data) { return res.sendFile(join(__dirname, './Assets/HTML/UserForm.html')); }
-            return res.status(401).send("Invalid User Session");
-        });
-
-        AuthFlow.post('/auth', (req, res, next) => {
-            // add to session_user_data and then add to db
-            
-            res.end();
-        })
-
-        return AuthFlow;
     }
 
     async QueryData(str: string, values: any[] = []) {

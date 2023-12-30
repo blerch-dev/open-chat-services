@@ -1,6 +1,5 @@
 export interface Model { // public fields/methods only
-    toJSON(): any,
-    DBInsertSafe(callback: (str: string, val: any[]) => Promise<DatabaseResponse>): Promise<any>
+    toJSON(): any
 }
 
 export interface UserData {
@@ -126,23 +125,3 @@ export type HTTPResponse = {
     message?: string,
     data?: unknown
 }
-
-export type DatabaseResponse = {
-    results?: any[],
-    meta?: any,
-    error?: {
-        code: number, // Matches HTTP Response Code
-        message?: string
-    }
-}
-
-// export interface APIResponse {
-//     okay: boolean,
-//     error?: APIError,
-//     data?: { [key: string]: unknown }
-// }
-
-// export interface APIError {
-//     message: string,
-//     code?: number
-// }

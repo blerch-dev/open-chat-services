@@ -27,3 +27,30 @@ export function sleep(ms: number) {
 export function padLeft(num: number, length = 2) {
     return ('0000' + num).slice(-1 * length);
 }
+
+import { ServerErrorType } from '../Models/Enums';
+export class ServerError extends Error {
+    private type: number;
+    private args: any[];
+
+    constructor(type = 0, ...args: any[]) {
+        super(...args);
+
+        this.type = type;
+        this.args = args;
+    }
+
+    getStatus() { return this.type; }
+
+    toJSON() {
+        let options = typeof(this.args[1] !== 'string') ? this.args[1] : undefined;
+
+        return {
+            type: ServerErrorType[this.type],
+            message: this.args[0] ?? undefined,
+            options: options,
+            fileName: options === undefined ? this.args[1] : undefined,
+            lineNumber: this.args[2] ?? undefined
+        }
+    }
+}

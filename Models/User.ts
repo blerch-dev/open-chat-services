@@ -1,18 +1,20 @@
 import { Router } from "express";
 import { QueryResult } from "pg";
-import { WebSocket } from "ws";
+import { Server, WebSocket } from "ws";
 
-import { ChatMessage, Model, UserData, DatabaseResponse, HTTPResponse, PlatformConnection } from "./Interfaces";
-import { GenerateUUID,ValidUUID } from "../Utils";
+import { ChatMessage, Model, UserData, HTTPResponse, PlatformConnection } from "./Interfaces";
+import { GenerateUUID,ServerError,ValidUUID } from "../Utils";
+import { ServerErrorType } from "./Enums";
+import { AffectedRowCount } from "../Data/Query";
 
 export class User implements Model {
     // #region User Creation
-    static CreateFromData(data: UserData): User | Error {
+    static CreateFromData(data: UserData): User | ServerError {
         if(data?.name?.length < 3 || data?.name?.length > 32) {
-            return Error("Name is an invalid length. Must be between 3 and 32 characters.");
+            return new ServerError(ServerErrorType.BadRequest, "Name is an invalid length. Must be between 3 and 32 characters.");
         }
 
-        if(!ValidUUID(data?.uuid)) { return Error("Invalid UUID given."); }
+        if(!ValidUUID(data?.uuid)) { return new ServerError(ServerErrorType.BadRequest, "Invalid UUID given."); }
 
         data.uuid = GenerateUUID();
         return new User(data);
@@ -130,66 +132,88 @@ export class User implements Model {
         // CREATE A VIEW FOR AUTO USER OBJECT FETCHING STUFF, will simplify api
     }    
 
-    static getAPIRouter(callback: (str: string, val: any[]) => Promise<QueryResult>, dev: boolean = false) {
+    static APIFunctions = {
+        GetUser: 
+        async (uuid: any, callback: (str: string, val: any[]) => Promise<QueryResult>): Promise<User | ServerError> => {
+            let result = await callback('SELECT * FROM users WHERE uuid = $1', [uuid]); // Combine with View - PG
+            if(result.rowCount === 0) { return new ServerError(ServerErrorType.MissingResource, "No User with Given UUID."); }
+            else if(result.rowCount > 1) { return new ServerError(ServerErrorType.AuthenticationError, "Non-Unique UUID. Contact Admins."); }
+            return User.CreateFromData(result.rows[0]);
+        },
+
+        GetUserByName: 
+        async (name: string, callback: (str: string, val: any[]) => Promise<QueryResult>): Promise<User[] | ServerError> => {
+            return new ServerError();
+        },
+
+        GetUserByAny: 
+        async (field: string, data: any, callback: (str: string, val: any[]) => Promise<QueryResult>): Promise<User[] | ServerError> => {
+            return new ServerError();
+        },
+
+        SafeInsert:
+        async (user: UserData, callback: (str: string, val: any[]) => Promise<QueryResult>): Promise<boolean | ServerError> => {
+            // return new ServerError();
+
+            // Check if Name/UUID is Unique
+            let result = await callback(`SELECT 1 FROM users WHERE uuid = $1 OR LOWER(name) = $2`, [user.uuid, user.name.toLowerCase()]);
+
+            // Handle Error for Uniques
+            if(result.rows.length > 0) { 
+                return new ServerError(ServerErrorType.UnprocessableContent, "Invalid UUID or Username.");
+            }
+
+            // Insert User
+            const ts = (val) => { return new Date(val).toISOString(); }
+            result = await callback(
+                'INSERT INTO users (uuid, name, status, hex, age, last) VALUES ($1, $2, $3, $4, $5, $6)',
+                [user.uuid, user.name, user.status, user.hex, ts(user.age), ts(user.last)]
+            );
+
+            // Insert to Associated Tables - TODO
+
+            return AffectedRowCount(result) > 0;
+        },
+    }
+
+    static getAPIRouter(callback: (str: string, val: any[]) => Promise<QueryResult>) {
         const route = Router();
 
         route.get('/me', async (req, res, next) => {
             // If Session, Fetch From DB, Refresh Session with Data, Return Data
-            // console.log("User Session:", req.session.user);
             if(req.session.user) {
+                // Respond if Cache is Fresh - No Detected Changes - TODO
+
                 // Refresh from DB
-                let result = await callback('SELECT * FROM users WHERE uuid = $1', [req.session.user.uuid]);
-                if(result.rowCount !== 1) { 
-                    return res.json({ error: { code: 500, message: "Invalid user database results." } } as DatabaseResponse); 
-                }
-
-                // Create User from DB Read
-                let user = User.CreateFromData(result.rows[0]);
-                if(user instanceof Error) { 
-                    return res.json({ error: { code: 500, message: "Issue creating user from stored data." } } as DatabaseResponse); 
-                }
-
-                // Update Session and Return User Data
-                req.session.user = (user as User).toJSON();
-                return res.json({ results: [(user as User).toJSON()] } as DatabaseResponse);
+                let result = await User.APIFunctions.GetUser(req.session.user.uuid, callback);
+                if(result instanceof ServerError) { return res.json(result.toJSON()); }
+                // Set Session
+                req.session.user = (result as User).toJSON();
+                return res.json({ me: result.toJSON() });
             }
 
-            return res.json({ error: { code: 401, message: "No User Session Data" } } as DatabaseResponse);
+            let error = new ServerError(ServerErrorType.AuthenticationError, "No User Session Data.");
+            return res.status(error.getStatus()).json(error.toJSON());
         });
 
         // Might Gate User Search to Mod/Bot Roles and Above, Open for Now
         route.get('/id/:id', async (req, res, next) => {
             let result = await callback('SELECT * FROM users WHERE uuid = $1', [req.params.id]);
-            return res.json({ results: result.rows, meta: {} } as DatabaseResponse);
+            return res.json({ results: result.rows, meta: {} });
         });
 
         route.get('/search/:search', async (req, res, next) => {
             let result = await callback('SELECT * FROM users WHERE uuid::text LIKE $1 OR name ILIKE $1', [req.params.search]);
-            return res.json({ results: result.rows, meta: {} } as DatabaseResponse);
+            return res.json({ results: result.rows, meta: {} });
         });
 
         route.post('/create', async (req, res, next) => {
             // Parses Form Body
             let result = await User.FormValidation(req.body);
             if(result instanceof User) {
-                // Insert User into DB
-                let userCreation = await result.DBInsertSafe(async (str: string, val: any[]) => {
-                    let result = await callback(str, val);
-                    return { results: result.rows, meta: {} } as DatabaseResponse
-                });
-                
-                // Dev Logging for Bug Fixing
-                if(result === userCreation && dev === true) { console.log("User Created and Inserted:", userCreation); }
-                else if(dev === true) { console.log("Issue Inserting User:", userCreation); }
-
-                // Handle Insert Results
-                if(userCreation instanceof User) {
-                    // Sets Session For Client
-                    req.session.user = userCreation.toJSON();
-                    return res.json(userCreation.toJSON());
-                } else {
-                    return res.status(userCreation.error?.code).json(userCreation);
-                }
+                let insert = await User.APIFunctions.SafeInsert(result.toJSON(), callback);
+                if(insert instanceof ServerError) { return res.status(insert.getStatus()).json(insert.toJSON()); }
+                return res.json({ user: result.toJSON(), added: insert as boolean });
             } else {
                 // Handle Error
                 return res.status(result.code).json(result);
@@ -212,37 +236,10 @@ export class User implements Model {
                 )
             `, [req.params.platform_id]);
 
-            return res.json({ results: result.rows, meta: {} } as DatabaseResponse);
+            return res.json({ results: result.rows, meta: {} });
         });
 
         return route;
-    }
-
-    async DBInsertSafe(callback: (str: string, val: any[]) => Promise<DatabaseResponse>, dev: boolean = false) {
-        // Check if Name/UUID is Unique
-        let result = await callback(`SELECT 1 FROM users WHERE uuid = $1 OR LOWER(name) = $2`, [this.data.uuid, this.data.name.toLowerCase()]);
-        if(dev === true) { console.log("Check for Uniques:", result); }
-
-        // Handle Error for Uniques
-        if(result.error) { if(dev === true) { console.log("Error::", result.error); } return result; }
-        else if(result.results.length > 0) { 
-            if(dev === true) { console.log("Not Unique"); } 
-            return { error: { code: 422, message: "Invalid UUID or Username." } } as DatabaseResponse; 
-        }
-
-        // Insert User
-        const ts = (val) => { return new Date(val).toISOString(); }
-        result = await callback(
-            'INSERT INTO users (uuid, name, status, hex, age, last) VALUES ($1, $2, $3, $4, $5, $6)',
-            [this.data.uuid, this.data.name, this.data.status, this.data.hex, ts(this.data.age), ts(this.data.last)]
-        );
-
-        // Insert to Associated Tables - TODO
-
-        // Handle Errors
-        if(dev === true) { console.log("Output for User Insert:", result); }
-        if(result.error) { console.log("Error::", result.error); return result; }
-        return this; // Returns User Object for Session
     }
     // #endregion
 
