@@ -1,7 +1,7 @@
 import { QueryResult } from "pg";
 import { Router } from "express";
 
-import { GenerateID, ServerError, ValidUUID } from "../Utils";
+import { GenerateID, ServerError, ValidUUID, ts } from "../Utils";
 import { HTTPResponse, ChannelData, Model } from "./Interfaces";
 import { Room } from "./Room";
 import { ServerErrorType } from "./Enums";
@@ -30,11 +30,7 @@ export class Channel implements Model {
         }
 
         let channel = Channel.CreateFromData(data);
-        if(channel instanceof Channel) {
-            return channel;
-        } else {
-            return { okay: false, code: 422, message: channel.message }
-        }
+        if(channel instanceof Channel) { return channel; } else { return channel.getAsHTTPResponse(); }
     }
 
     static GenerateID() { return GenerateID(8); }
@@ -129,12 +125,9 @@ export class Channel implements Model {
 
             // Insert Channel
             result = await callback(
-                `INSERT INTO channels (id, slug, owner_uuid, name, domain, icon, twitch_id, youtube_id, kick_id, rumble_id) 
+                `INSERT INTO channels (id, slug, owner_uuid, name, domain, icon, creation, last_active) 
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-                [
-                    channel.id, channel.slug, channel.owner_uuid, channel.domain, channel.icon, 
-                    channel.embeds?.twitch, channel.embeds?.youtube, channel.embeds?.kick, channel.embeds?.rumble
-                ]
+                [channel.id, channel.slug, channel.owner_uuid, channel.domain, channel.icon, ts(channel.age), ts(channel.last)]
             );
             
             // Insert to Associated Tables - TODO
@@ -193,7 +186,23 @@ export class Channel implements Model {
     private room: Room;
 
     constructor(data: ChannelData) { 
-        this.data = data;
+        this.data = {
+            id: data.id ?? null,
+            slug: data.slug ?? null,
+            owner_uuid: data.owner_uuid ?? null,
+            name: data.name ?? data.slug ?? '',
+            domain: data.domain ?? `${this.data.slug ?? this.data.id}.openchat.dev`,
+            icon: data.icon ?? '/channel-logo.svg',
+            age: data.age ?? Date.now(),
+            last: data.last ?? Date.now(),
+
+            embeds: data.embeds ?? {},
+
+            badges: data.badges ?? [],
+            emotes: data.emotes ?? [],
+            roles: data.roles ?? []
+        };
+
         this.room = new Room({
             id: this.data.id,
             name: this.data.name ?? this.data.slug ?? this.data.id ?? 'unnamed-room'
@@ -208,6 +217,9 @@ export class Channel implements Model {
             name: this.data.name ?? this.data.slug ?? '',
             domain: this.data.domain ?? `${this.data.slug ?? this.data.id}.openchat.dev`,
             icon: this.data.icon ?? '/channel-logo.svg',
+            age: this.data?.age ?? Date.now(),
+            last: this.data?.last ?? Date.now(),
+
             embeds: this.data.embeds ?? {},
 
             badges: this.data.badges ?? [],

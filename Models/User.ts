@@ -3,7 +3,7 @@ import { QueryResult } from "pg";
 import { Server, WebSocket } from "ws";
 
 import { ChatMessage, Model, UserData, HTTPResponse, PlatformConnection } from "./Interfaces";
-import { GenerateUUID,ServerError,ValidUUID } from "../Utils";
+import { GenerateUUID,ServerError,ValidUUID, ts } from "../Utils";
 import { ServerErrorType } from "./Enums";
 import { AffectedRowCount } from "../Data/Query";
 
@@ -14,9 +14,10 @@ export class User implements Model {
             return new ServerError(ServerErrorType.BadRequest, "Name is an invalid length. Must be between 3 and 32 characters.");
         }
 
-        if(!ValidUUID(data?.uuid)) { return new ServerError(ServerErrorType.BadRequest, "Invalid UUID given."); }
+        // Bad UUID is blocked from creating a user, if no uuid we assume it is a non-db instance of a User and generate a new one.
+        if(data.uuid && !ValidUUID(data?.uuid)) { return new ServerError(ServerErrorType.BadRequest, "Invalid UUID given."); }
 
-        data.uuid = GenerateUUID();
+        data.uuid = GenerateUUID(); //
         return new User(data);
     }
 
@@ -27,15 +28,15 @@ export class User implements Model {
         }
 
         let user = User.CreateFromData(data);
-        if(user instanceof User) {
-            return user;
-        } else {
-            return { okay: false, code: 422, message: user.message }
-        }
+        if(user instanceof User) { return user; } else { return user.getAsHTTPResponse(); }
     }
 
-    static CreateFromOAuth(connection: PlatformConnection): User {
-        return new User({ uuid: GenerateUUID(), name: connection.name, auth: [connection] });
+    static CreateFromOAuth(connection: PlatformConnection): User | ServerError {
+        if(!connection?.id || !connection?.name) {
+            return new ServerError(ServerErrorType.UnprocessableContent, "Missing required platform data.");
+        }
+
+        return User.CreateFromData({ uuid: GenerateUUID(), name: connection.name, auth: [connection] });
     }
     // #endregion
     
@@ -164,9 +165,8 @@ export class User implements Model {
             }
 
             // Insert User
-            const ts = (val) => { return new Date(val).toISOString(); }
             result = await callback(
-                'INSERT INTO users (uuid, name, status, hex, age, last) VALUES ($1, $2, $3, $4, $5, $6)',
+                'INSERT INTO users (uuid, name, status, hex, creation, last_active) VALUES ($1, $2, $3, $4, $5, $6)',
                 [user.uuid, user.name, user.status, user.hex, ts(user.age), ts(user.last)]
             );
 
@@ -199,16 +199,21 @@ export class User implements Model {
         // Might Gate User Search to Mod/Bot Roles and Above, Open for Now
         route.get('/id/:id', async (req, res, next) => {
             let result = await callback('SELECT * FROM users WHERE uuid = $1', [req.params.id]);
-            return res.json({ results: result.rows, meta: {} });
+            return res.json({ results: result.rows, meta: { } });
         });
+
+        route.delete('/id/:id', async (req, res, next) => {
+            let result = await callback('DELETE FROM users WHERE uuid::text LIKE $1', [req.params.id]);
+            return res.json({ results: result.rows, meta: { affectedRows: result.rowCount } });
+        })
 
         route.get('/search/:search', async (req, res, next) => {
             let result = await callback('SELECT * FROM users WHERE uuid::text LIKE $1 OR name ILIKE $1', [req.params.search]);
-            return res.json({ results: result.rows, meta: {} });
+            return res.json({ results: result.rows, meta: { } });
         });
 
         route.post('/create', async (req, res, next) => {
-            // Parses Form Body
+            // Parses Form Body - No Session, This should be handled where we create them programmatically
             let result = await User.FormValidation(req.body);
             if(result instanceof User) {
                 let insert = await User.APIFunctions.SafeInsert(result.toJSON(), callback);
@@ -236,6 +241,12 @@ export class User implements Model {
                 )
             `, [req.params.platform_id]);
 
+            return res.json({ results: result.rows, meta: {} });
+        });
+
+        // Dev Only
+        route.get('/all', async (req, res) => {
+            let result = await callback(`SELECT * FROM users`, []);
             return res.json({ results: result.rows, meta: {} });
         });
 

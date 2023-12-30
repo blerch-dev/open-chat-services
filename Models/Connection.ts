@@ -6,7 +6,7 @@ import { QueryResult } from 'pg';
 
 import { Channel } from "./Channel";
 import { User } from "./User";
-import { UserData } from "./Interfaces";
+import { PlatformConnection, UserData } from "./Interfaces";
 import { GenerateUUID, ServerError } from "../Utils";
 import { Platforms, ServerErrorType } from "./Enums";
 
@@ -14,9 +14,9 @@ export class PlatformManager {
     private twitch: TwitchOAuth;
     private youtube: YoutubeOAuth;
 
-    private query_callback: (str: string, val: any[]) => Promise<QueryResult>
+    private query: (str: string, val: any[]) => Promise<QueryResult>
 
-    constructor(params?: { twitch: any, youtube: any, query_callback: any }) {
+    constructor(query: (str: string, val: any[]) => Promise<QueryResult>, params?: { twitch?: any, youtube?: any }) {
         this.twitch = new TwitchOAuth(params?.twitch ?? { 
             client: { id: process.env.TWITCH_CLIENT_ID, secret: process.env.TWITCH_CLIENT_SECRET },
             dev: true
@@ -26,14 +26,14 @@ export class PlatformManager {
             client: { id: process.env.YOUTUBE_CLIENT_ID, secret: process.env.YOUTUBE_CLIENT_SECRET }
         });
 
-        this.query_callback = params.query_callback ? params.query_callback : () => { return null; };
+        this.query = query;
     }
 
     GetRouter() {
         const route = Router();
 
-        route.use('/twitch', this.twitch.Handler(this.query_callback));
-        route.use('/youtube', this.youtube.Handler(this.query_callback));
+        route.use('/twitch', this.twitch.Handler(this.query));
+        route.use('/youtube', this.youtube.Handler(this.query));
 
         return route;
     }
@@ -51,7 +51,7 @@ abstract class OAuth {
     abstract Handler(query: (str: string, val: any[]) => Promise<QueryResult>): Router;
 
     abstract UserSubbedToChannel(user: User, Channel: Channel): void;
-    abstract CreateUserFromPlatformData(data: any): User | Error;
+    abstract CreateUserFromPlatformData(data: any): User | ServerError;
 
     public async UserCreationForm(user: User | UserData) {
         if(user instanceof User) { return await readFile(resolve(__dirname, './Assets/HTML/ValidUser.html'), 'utf8'); }
@@ -81,7 +81,7 @@ export class TwitchOAuth extends OAuth {
     }
 
     // Break Into Functions
-    public async Verify(data: { code: string, origin: string }): Promise<{ user: User | ServerError, connection: any }> {
+    public async Verify(data: { code: string, origin: string }): Promise<{ user: User | ServerError, connection: PlatformConnection }> {
         let validate_url = `https://id.twitch.tv/oauth2/token?client_id=${this.client.id}
             &client_secret=${this.client.secret}
             &code=${data.code}
@@ -101,7 +101,13 @@ export class TwitchOAuth extends OAuth {
             }
         })).json();
 
-        return { user: await this.GetUserFromData(result), connection: { twitch: result } };
+        const platform_connection = {
+            id: result?.data?.[0]?.id ?? null,
+            name: result?.data?.[0]?.login ?? null,
+            platform: Platforms.Twitch
+        } as PlatformConnection
+
+        return { user: await this.GetUserFromData(result), connection: platform_connection };
     }
 
     private async GetUserFromData(json: any): Promise<User | ServerError> {
@@ -116,7 +122,7 @@ export class TwitchOAuth extends OAuth {
         let route = Router();
 
         route.get('/', (req, res, next) => { 
-            req.session.state = { origin: req.headers.origin }
+            req.session.state = { referer: req.headers.referer }
             res.redirect(this.Authenticate({ origin: req.headers.origin })); 
         });
 
@@ -125,16 +131,20 @@ export class TwitchOAuth extends OAuth {
             let { user, connection } = await this.Verify({ code: req.query.code as string, origin: req.session?.state?.origin ?? req.headers.origin });
             if(user instanceof ServerError) {
                 user = await User.CreateFromOAuth(connection);
+                if(user instanceof ServerError) {
+                    return res.redirect(req.session.state.referer + `/api/error?${user.toJSON()}`);
+                }
+
                 let insert = await User.APIFunctions.SafeInsert(user.toJSON(), query);
-                if(insert instanceof ServerError) { return res.redirect(req.session.state.origin + `/api/error?${insert.toJSON()}`); }
+                if(insert instanceof ServerError) { return res.redirect(req.session.state.referer + `/api/error?${insert.toJSON()}`); }
                 if(insert === false) { 
                     let error = new ServerError(ServerErrorType.ServerError, "Issue Adding User to Database. Try Again Later.");
-                    return res.redirect(req.session.state.origin + `/api/error?${error.toJSON()}`);
+                    return res.redirect(req.session.state.referer + `/api/error?${error.toJSON()}`);
                 }
             }
 
-            req.session.user = user.toJSON(); 
-            return res.redirect(req.session.state?.origin);
+            req.session.user = user.toJSON();
+            return res.redirect(req.session.state?.referer);
         });
 
         return route;
@@ -146,7 +156,7 @@ export class TwitchOAuth extends OAuth {
 
     public CreateUserFromPlatformData(data: { twitch: any, input: any }) {
         if(data?.twitch?.id == undefined || data?.twitch?.login == undefined) { 
-            return new Error("Invalid Twitch Data"); 
+            return new ServerError(ServerErrorType.UnprocessableContent, "Invalid Twitch Data"); 
         }
 
         return User.CreateFromData({
@@ -187,7 +197,7 @@ export class YoutubeOAuth extends OAuth {
     // Copied from twitch, change to match youtube data format
     public CreateUserFromPlatformData(data: { youtube: any, input: any }) {
         if(data?.youtube?.id == undefined || data?.youtube?.login == undefined) { 
-            return new Error("Invalid Twitch Data"); 
+            return new ServerError(ServerErrorType.UnprocessableContent, "Invalid Youtube Data"); 
         }
         
         return User.CreateFromData({

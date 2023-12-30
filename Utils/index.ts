@@ -29,24 +29,29 @@ export function padLeft(num: number, length = 2) {
 }
 
 import { ServerErrorType } from '../Models/Enums';
-export class ServerError extends Error {
-    private type: number;
+import { HTTPResponse } from '../Models/Interfaces';
+export class ServerError {
+    private code: number;
     private args: any[];
 
-    constructor(type = 0, ...args: any[]) {
-        super(...args);
+    constructor(code = 0, ...args: any[]) {
+        // super(...args);
 
-        this.type = type;
+        this.code = code;
         this.args = args;
     }
 
-    getStatus() { return this.type; }
+    getStatus() { return this.code; }
+
+    getMessage() { return this.args[0] as string ?? ""; }
+
+    getAsHTTPResponse() { return { okay: false, code: this.code, message: this.args?.[0] } as HTTPResponse }
 
     toJSON() {
         let options = typeof(this.args[1] !== 'string') ? this.args[1] : undefined;
 
         return {
-            type: ServerErrorType[this.type],
+            code: ServerErrorType[this.code],
             message: this.args[0] ?? undefined,
             options: options,
             fileName: options === undefined ? this.args[1] : undefined,
@@ -54,3 +59,5 @@ export class ServerError extends Error {
         }
     }
 }
+
+export const ts = (val) => { return new Date(val).toISOString(); }

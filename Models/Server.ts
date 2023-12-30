@@ -6,6 +6,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { createProxyServer } from "http-proxy";
 import * as session from "express-session"
 import * as express from "express";
+import { QueryResult } from "pg";
 import * as cors from "cors";
 
 import { ServerParams, ChatServerParams, AuthServerParams, UserData, ChatMessage } from "./Interfaces";
@@ -47,6 +48,8 @@ export class GatewayServer {
             // console.log("Req Origin:", req.headers.origin);
             // if(req.rawHeaders.includes('websocket')) { console.log("WS Request::", req.headers); } // issue with sockets not connecting/wrong url
 
+            console.snap("Gateway Access:", req.headers.host, ' - From:', req.headers.referer);
+            
             let gate = this.map.get(req.headers.host);
             if(gate === undefined) { return res.writeHead(404, "No Target Domain for Give Host.").end(); }
 
@@ -232,13 +235,15 @@ export class AuthServer {
     private DB: APIConnection;
     private server: Server;
 
+    private query: (str: string, val: any[]) => Promise<QueryResult<any>>;
     private oauth: PlatformManager;
 
     constructor(params: AuthServerParams) {
         this.DB = new APIConnection();
         this.server = params.server;
 
-        this.oauth = new PlatformManager();
+        this.query = (str: string, val: any[]) => { return this.DB.Query(str, val); }
+        this.oauth = new PlatformManager(this.query);
     }
 
     isConnected() {
@@ -249,10 +254,10 @@ export class AuthServer {
         const API = express.Router();
 
         // User Model - Requires Lambda to Keep Context
-        API.use('/user', User.getAPIRouter((...args) => { return this.DB.Query(...args); }));
+        API.use('/user', User.getAPIRouter(this.query));
 
         // Channel Model - Requires Lambda to Keep Context
-        API.use('/channel', Channel.getAPIRouter((...args) => { return this.DB.Query(...args); }));
+        API.use('/channel', Channel.getAPIRouter(this.query));
 
         // OAuth
         API.use('/oauth', this.oauth.GetRouter());

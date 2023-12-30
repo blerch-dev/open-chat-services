@@ -35,6 +35,8 @@ export interface ChannelData {
     name: string, // defaults to slug
     domain?: string, // defaults to ${slug ?? id}.openchat.dev
     icon?: string,
+    age?: number, // epoch ts from account creation
+    last?: number, // epoch of last long session generation (every other week)
     embeds?: {
         twitch?: string,
         youtube?: string,
